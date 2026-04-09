@@ -567,11 +567,13 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
           </span>
         </div>
         <textarea id="op-guidance" rows="3"
-          placeholder="Add context, new constraints, or direction to steer agents toward agreement. Injected into every agent's system prompt going forward."
-          style="border-color:rgba(186,117,23,0.4)"></textarea>
+          placeholder="Add context, new constraints, or direction to steer agents toward agreement. Injected into every agent's system prompt going forward. Or type a definitive answer and click 'Use as final answer'."
+          style="border-color:rgba(186,117,23,0.4)"
+          oninput="const b=$('use-as-answer-btn');b.style.display=this.value.trim()?'':'none'"></textarea>
       </div>
       <div class="flex gap8 wrap-row">
         <button class="primary" id="resume-btn" onclick="resumeSession()">Resume collaboration ↗</button>
+        <button id="use-as-answer-btn" onclick="useGuidanceAsAnswer()" style="display:none">Use as final answer ↗</button>
         <button id="end-btn" onclick="endSession()">End &amp; synthesize now</button>
       </div>
       <div id="agent-wins-row" class="hidden" style="margin-top:10px">
@@ -1383,7 +1385,7 @@ async function runOneRound(){
   const independent = S.round === 1;
   const nearEnd     = isFinite(S.maxRounds) && S.round >= S.maxRounds * 0.8;
   const certRound = !independent && S.consensusMode === 'auto' &&
-    (S.round >= 3 || S.guidances.length > 0);
+    (S.round >= 2 || S.guidances.length > 0);
   const guidanceBlock = ''; // operator override now handled directly in buildPrompts
   const verbNote = VERBOSITY_PROMPTS[CFG.verbosity] || VERBOSITY_PROMPTS.standard;
 
@@ -1442,7 +1444,10 @@ async function runOneRound(){
         ? 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.'
         : `Round ${S.round}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
       // Suspend debate structure when operator has ruled
-      (!independent && !hasGuidance) ? `RESPONSE STRUCTURE (mandatory — follow this exactly):
+      (!independent && !hasGuidance) ? `BREVITY RULE (check this first):
+If the problem has a clear, definitive, factual answer that all agents have already stated correctly in Round 1, do NOT elaborate further. Write only: "AGREEMENT: The answer is [answer]. Nothing to add." and append [CONSENSUS: YES]. Do not introduce historical context, second-order effects, or analysis unless the problem explicitly asks for it.
+
+RESPONSE STRUCTURE (only if the above does not apply — follow this exactly):
 
 1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
 
@@ -1631,6 +1636,7 @@ async function showPause(){
   $('pause-sub').textContent=`No consensus after ${S.round} rounds. Analyzing disagreements…`;
   $('disagree-box').textContent='Analyzing…';
   $('op-guidance').value='';
+  $('use-as-answer-btn').style.display='none';
   $('resume-btn').disabled=true; $('end-btn').disabled=true;
   $('pause-panel').classList.remove('hidden');
   setState('Paused');
@@ -1683,6 +1689,22 @@ async function invokeManualArbitrator(agentId) {
   S.judgeAgent = agent;
   S.judgeRound = S.round;
   await callJudge();
+}
+
+async function useGuidanceAsAnswer() {
+  const g = $('op-guidance').value.trim();
+  if(!g) return;
+  $('pause-panel').classList.add('hidden');
+  // Record the guidance for history
+  S.guidances.push({afterRound: S.round, text: g});
+  addMsg('sys','','','',`⚖ Operator ruling after round ${S.round}: "${g.length>120?g.slice(0,120)+'…':g}"`);
+  // Inject as judge ruling and go straight to synthesis —
+  // bypasses all further agent rounds
+  S.judgeRuling = g;
+  S.lastCertifyingAgent = S.agents[Math.floor(Math.random() * S.agents.length)];
+  S.consensusReached = false;
+  S.done = true;
+  await generateSynthesis();
 }
 
 async function resumeSession(){
