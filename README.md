@@ -337,7 +337,7 @@ The more consequential the decision, the more skepticism you should apply.
 
 ---
 
-
+## Costs & Responsibilities
 
 - API usage costs are incurred directly with each provider (Anthropic, OpenAI, xAI, Google) based on tokens consumed. The live cost display in the UI tracks session spend in real time. Economy-tier models (the default) are significantly cheaper — a typical 10-round session with 4 agents costs less than $0.10 at economy tier.
 - Self-hosting this application on your own infrastructure incurs whatever compute and bandwidth costs your environment carries. There is no licensing fee for the software itself.

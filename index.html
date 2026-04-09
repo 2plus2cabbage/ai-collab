@@ -574,6 +574,10 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
         <button class="primary" id="resume-btn" onclick="resumeSession()">Resume collaboration ↗</button>
         <button id="end-btn" onclick="endSession()">End &amp; synthesize now</button>
       </div>
+      <div id="agent-wins-row" class="hidden" style="margin-top:10px">
+        <div class="pause-lbl" style="margin-bottom:6px">Or designate an agent to close the discussion as arbitrator</div>
+        <div id="agent-wins-btns" class="flex gap8 wrap-row"></div>
+      </div>
     </div>
   </div>
 
@@ -1624,6 +1628,22 @@ async function showPause(){
   addMsg('sys','','','',`⏸ Paused at round ${S.round} for operator review.`);
   setStatus('Generating disagreement analysis…');
 
+  // Render agent close buttons immediately — before the async dispatch
+  const winsRow = $('agent-wins-row');
+  const winsBtns = $('agent-wins-btns');
+  if(!S.judgeAgent && S.agents.length >= 2){
+    winsBtns.innerHTML = S.agents.map(a =>
+      `<button onclick="invokeManualArbitrator('${a.id}')"
+        style="font-size:12px;padding:5px 12px;display:inline-flex;align-items:center;gap:6px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${a.dot};display:inline-block"></span>
+        ${a.name} closes
+      </button>`
+    ).join('');
+    winsRow.classList.remove('hidden');
+  } else {
+    winsRow.classList.add('hidden');
+  }
+
   const ag = getDisagreeingAgent();
   const recent = S.log.slice(-30);
 
@@ -1644,6 +1664,16 @@ One sentence per bullet. No preamble. No conclusions. Maximum 5 bullets.`;
   $('pause-sub').textContent=`Review, add guidance, then resume or end.`;
   setStatus('',false);
   $('resume-btn').disabled=false; $('end-btn').disabled=false;
+}
+
+async function invokeManualArbitrator(agentId) {
+  const agent = S.agents.find(a => a.id === agentId);
+  if(!agent) return;
+  $('pause-panel').classList.add('hidden');
+  // Use the selected agent as the judge — reuse callJudge logic
+  S.judgeAgent = agent;
+  S.judgeRound = S.round;
+  await callJudge();
 }
 
 async function resumeSession(){
