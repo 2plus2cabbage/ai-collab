@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Agent Collaboration</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#ffffff; --bg2:#f6f5f1; --bg3:#eeedea;
+  --text:#1a1a18; --text2:#65655f; --text3:#99998f;
+  --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18);
+  --purple:#7F77DD; --teal:#1D9E75; --amber:#BA7517;
+  --blue:#378ADD; --green:#639922; --r:8px; --rl:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{ --bg:#181818; --bg2:#222220; --bg3:#2a2a28;
+    --text:#f0f0ec; --text2:#99998f; --text3:#65655f;
+    --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.17); }
+}
+body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:14px; color:var(--text); background:var(--bg3); min-height:100vh; }
+.wrap{ max-width:1020px; margin:0 auto; padding:24px 16px; }
+h1{ font-size:17px; font-weight:500; }
+.sub{ font-size:12px; color:var(--text2); margin-top:2px; }
+.card{ background:var(--bg); border-radius:var(--rl); border:0.5px solid var(--border2);
+  padding:16px 18px; margin-bottom:14px; }
+.sec-hdr{ font-size:12px; font-weight:500; color:var(--text2); text-transform:uppercase;
+  letter-spacing:.05em; padding-bottom:10px; margin-bottom:14px;
+  border-bottom:0.5px solid var(--border); }
+label{ display:block; font-size:11px; font-weight:500; color:var(--text2);
+  text-transform:uppercase; letter-spacing:.04em; margin-bottom:5px; }
+input[type=text],textarea,select{
+  font-family:inherit; font-size:13px; color:var(--text); background:var(--bg);
+  border:0.5px solid var(--border2); border-radius:var(--r); padding:7px 10px;
+  width:100%; outline:none; transition:border-color .15s; }
+textarea{ resize:vertical; line-height:1.6; }
+input:focus,textarea:focus,select:focus{
+  border-color:var(--purple); box-shadow:0 0 0 2px rgba(127,119,221,0.12); }
+.field{ margin-bottom:12px; }
+button{ font-family:inherit; font-size:13px; font-weight:500; cursor:pointer;
+  border-radius:var(--r); border:0.5px solid var(--border2); background:var(--bg);
+  color:var(--text); padding:8px 16px; transition:all .15s; white-space:nowrap; }
+button:hover:not(:disabled){ background:var(--bg2); }
+button:disabled{ opacity:.4; cursor:not-allowed; }
+button.primary{ background:#534AB7; color:#fff; border-color:#534AB7; }
+button.primary:hover:not(:disabled){ background:#3C3489; border-color:#3C3489; }
+button.stop{ background:#FCEBEB; color:#A32D2D; border-color:#F09595; }
+button.stop:hover:not(:disabled){ background:#F7C1C1; }
+.grid4{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:700px){ .grid4{grid-template-columns:1fr 1fr;} .grid2{grid-template-columns:1fr;} }
+.flex{ display:flex; } .gap8{gap:8px;} .gap10{gap:10px;}
+.wrap-row{flex-wrap:wrap;} .items-end{align-items:flex-end;}
+
+/* Agent cards */
+.acard{ border:0.5px solid var(--border); border-radius:var(--rl); padding:12px;
+  background:var(--bg); transition:opacity .2s,border-color .2s; }
+.acard.on{ border-color:var(--border2); } .acard.off{ opacity:.45; }
+.acard-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.acard-name{ display:flex; align-items:center; gap:7px; font-size:13px; font-weight:500; }
+.dot{ display:inline-block; width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.toggle{ width:30px; height:17px; border-radius:9px; background:var(--border2);
+  position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
+.toggle.on{ background:#534AB7; }
+.toggle::after{ content:''; width:13px; height:13px; border-radius:50%; background:#fff;
+  position:absolute; top:2px; left:2px; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle.on::after{ left:15px; }
+.tog-lbl{ font-size:11px; color:var(--text2); }
+.pill{ font-size:11px; border-radius:20px; padding:2px 8px; font-weight:500; display:inline-block; }
+.pill-ok{ background:#EAF3DE; color:#27500A; } .pill-bad{ background:#FCEBEB; color:#791F1F; }
+@media(prefers-color-scheme:dark){
+  .pill-ok{background:#173404;color:#C0DD97;} .pill-bad{background:#501313;color:#F7C1C1;}
+}
+
+/* Radio / checkbox controls */
+.radio-group{ display:flex; flex-wrap:wrap; gap:8px; }
+.radio-opt{ display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;
+  padding:7px 14px; border-radius:var(--r); border:0.5px solid var(--border2);
+  background:var(--bg); transition:all .15s; user-select:none; }
+.radio-opt:hover{ background:var(--bg2); }
+.radio-opt.active{ border-color:var(--purple); background:#EEEDFE; color:#3C3489; font-weight:500; }
+@media(prefers-color-scheme:dark){ .radio-opt.active{background:#26215C;color:#CECBF6;} }
+.radio-opt input{ display:none; }
+.check-opt{ display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;
+  padding:7px 14px; border-radius:var(--r); border:0.5px solid var(--border2);
+  background:var(--bg); transition:all .15s; user-select:none; }
+.check-opt:hover{ background:var(--bg2); }
+.check-opt.active{ border-color:var(--purple); background:#EEEDFE; color:#3C3489; }
+@media(prefers-color-scheme:dark){ .check-opt.active{background:#26215C;color:#CECBF6;} }
+.check-opt input{ display:none; }
+
+/* Tier preview */
+.tier-preview{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:10px; }
+.tier-cell{ font-size:12px; padding:6px 10px; border-radius:var(--r);
+  background:var(--bg2); text-align:center; }
+.tier-cell strong{ display:block; font-size:10px; color:var(--text3); font-weight:400; margin-bottom:2px; }
+
+/* Conversation */
+#thread{ overflow-y:auto; padding:2px 0; scroll-behavior:smooth; }
+#thread::-webkit-scrollbar{width:4px;}
+#thread::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.msg{ padding:10px 13px; margin-bottom:8px; border-radius:var(--r);
+  background:var(--bg2); border-left:3px solid transparent; }
+.msg-sys{ background:transparent!important; border-left:none!important;
+  padding:3px 0!important; font-size:11px; color:var(--text3); font-style:italic; }
+.msg-synth{ border-left-color:var(--green)!important; background:#EAF3DE!important; }
+.msg-synth .msg-text{ color:#1a3a0a; }
+.msg-drop{ background:#FCEBEB!important; border-left-color:#E24B4A!important; }
+.msg-drop .msg-text,.msg-drop .error-label{ color:#7a1f1f; }
+.msg-warn{ background:#FAEEDA!important; border-left-color:#BA7517!important; }
+.msg-skip{ background:#FFF8E1!important; border-left-color:#F9A825!important; }
+/* Dark mode — system preference */
+@media(prefers-color-scheme:dark){
+  .msg-synth{ background:#173404!important; }
+  .msg-synth .msg-text{ color:#C0DD97; }
+  .msg-drop{ background:#3a0a0a!important; }
+  .msg-drop .msg-text,.msg-drop .error-label{ color:#F7C1C1; }
+  .msg-warn{ background:#2a1a05!important; }
+  .msg-skip{ background:#2a2000!important; }
+  .pill-ok{background:#173404;color:#C0DD97;} .pill-bad{background:#501313;color:#F7C1C1;}
+}
+/* Dark mode — forced via settings */
+html.force-dark .msg-synth{ background:#173404!important; }
+html.force-dark .msg-synth .msg-text{ color:#C0DD97!important; }
+html.force-dark .msg-drop{ background:#3a0a0a!important; }
+html.force-dark .msg-drop .msg-text,
+html.force-dark .msg-drop .error-label{ color:#F7C1C1!important; }
+html.force-dark .msg-warn{ background:#2a1a05!important; }
+html.force-dark .msg-skip{ background:#2a2000!important; }
+html.force-dark .pause-wrap{ background:#2a1a05!important; }
+html.force-dark .pause-title{ color:#FAC775!important; }
+html.force-dark .pause-sub{ color:#EF9F27!important; }
+html.force-dark .pause-lbl{ color:#EF9F27!important; }
+html.force-dark .drop-wrap{ background:#2a0a0a!important; }
+html.force-dark .drop-title{ color:#F7C1C1!important; }
+html.force-dark .drop-sub{ color:#F09595!important; }
+html.force-dark .error-label{ color:#F09595!important; }
+html.force-dark .drop-reason{ background:#222220!important; color:#f0f0ec!important; }
+html.force-dark .pill-ok{ background:#173404!important; color:#C0DD97!important; }
+html.force-dark .pill-bad{ background:#501313!important; color:#F7C1C1!important; }
+html.force-dark .radio-opt.active{ background:#26215C!important; color:#CECBF6!important; }
+html.force-dark .check-opt.active{ background:#26215C!important; color:#CECBF6!important; }
+html.force-light .msg-synth .msg-text{ color:#1a3a0a!important; }
+.msg-head{ display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
+.msg-name{ font-size:11px; font-weight:500; color:var(--text2); }
+.msg-round{ font-size:10px; color:var(--text3); }
+.msg-text{ font-size:13px; line-height:1.75; white-space:pre-wrap; color:var(--text); }
+
+/* Status */
+.sbar{ display:flex; align-items:center; gap:8px; font-size:12px;
+  color:var(--text2); padding:6px 0; min-height:32px; }
+.typing span{ display:inline-block; width:5px; height:5px; border-radius:50%;
+  background:var(--text3); margin:0 1.5px; animation:blink 1.1s infinite; }
+.typing span:nth-child(2){animation-delay:.22s;} .typing span:nth-child(3){animation-delay:.44s;}
+@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}
+.rbar{ display:flex; align-items:center; gap:10px; padding:7px 12px;
+  background:var(--bg2); border-radius:var(--r); font-size:12px; color:var(--text2); margin-bottom:10px; }
+.rnum{ font-size:14px; font-weight:500; color:var(--text); }
+.legend{ display:flex; flex-wrap:wrap; gap:10px; font-size:12px; }
+.legend-item{ display:flex; align-items:center; gap:5px; color:var(--text2); }
+
+/* Pause */
+.pause-wrap{ border:1.5px solid var(--amber); border-radius:var(--rl);
+  padding:18px 20px; background:#FAEEDA; }
+@media(prefers-color-scheme:dark){.pause-wrap{background:#2a1a05;}}
+.pause-title{ font-size:15px; font-weight:500; color:#633806; margin-bottom:3px; }
+.pause-sub{ font-size:12px; color:#854F0B; margin-bottom:14px; }
+@media(prefers-color-scheme:dark){.pause-title{color:#FAC775;}.pause-sub{color:#EF9F27;}}
+.disagree-box{ background:var(--bg); border-radius:var(--r); padding:12px;
+  border:0.5px solid rgba(186,117,23,.3); font-size:13px; line-height:1.75;
+  white-space:pre-wrap; color:var(--text); max-height:240px; overflow-y:auto; }
+.pause-lbl{ font-size:11px; font-weight:500; color:#854F0B; text-transform:uppercase;
+  letter-spacing:.04em; margin-bottom:5px; }
+@media(prefers-color-scheme:dark){.pause-lbl{color:#EF9F27;}}
+
+hr{ border:none; border-top:0.5px solid var(--border); margin:16px 0; }
+.hidden{ display:none!important; }
+.mb12{margin-bottom:12px;} .mt12{margin-top:12px;}
+.hint{ font-size:11px; color:var(--text3); margin-top:4px; min-height:14px; }
+
+/* Color mode overrides — applied via JS when user picks light or dark explicitly */
+html.force-light {
+  color-scheme: light;
+  --bg:#ffffff; --bg2:#f6f5f1; --bg3:#eeedea;
+  --text:#1a1a18; --text2:#65655f; --text3:#99998f;
+  --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); }
+html.force-dark {
+  color-scheme: dark;
+  --bg:#181818; --bg2:#222220; --bg3:#2a2a28;
+  --text:#f0f0ec; --text2:#99998f; --text3:#65655f;
+  --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.17); }
+/* Explicitly re-apply form element colors under forced modes so browser UA
+   styles don't win. The color-scheme property alone isn't always enough. */
+html.force-dark input[type=text],
+html.force-dark textarea,
+html.force-dark select,
+html.force-dark button:not(.primary):not(.stop) {
+  background-color:#222220; color:#f0f0ec;
+  border-color:rgba(255,255,255,0.17); }
+html.force-light input[type=text],
+html.force-light textarea,
+html.force-light select,
+html.force-light button:not(.primary):not(.stop) {
+  background-color:#ffffff; color:#1a1a18;
+  border-color:rgba(0,0,0,0.18); }
+html.force-dark .card,
+html.force-dark .acard,
+html.force-dark .pause-wrap { background-color:#181818; }
+html.force-dark .rbar,
+html.force-dark .msg:not(.msg-sys):not(.msg-synth):not(.msg-drop):not(.msg-warn):not(.msg-skip),
+html.force-dark .disagree-box { background-color:#222220; color:#f0f0ec; }
+
+/* Drop confirmation panel */
+.drop-wrap{ border:1.5px solid #E24B4A; border-radius:var(--rl);
+  padding:18px 20px; background:#FCEBEB; margin-top:14px; }
+@media(prefers-color-scheme:dark){ .drop-wrap{background:#2a0a0a;} }
+html.force-dark .drop-wrap{ background:#2a0a0a!important; }
+html.force-light .drop-wrap{ background:#FCEBEB!important; }
+.drop-title{ font-size:15px; font-weight:500; color:#A32D2D; margin-bottom:4px; }
+.drop-sub{ font-size:12px; color:#791F1F; margin-bottom:14px; }
+@media(prefers-color-scheme:dark){ .drop-title{color:#F7C1C1;}.drop-sub{color:#F09595;} }
+html.force-dark .drop-title{ color:#F7C1C1!important; }
+html.force-dark .drop-sub{ color:#F09595!important; }
+.drop-reason{ background:var(--bg); border-radius:var(--r); padding:10px 12px;
+  border:0.5px solid rgba(226,75,74,.3); font-size:13px; line-height:1.6;
+  color:var(--text); margin-bottom:14px; font-family:inherit; }
+.error-label{ font-size:11px; font-weight:500; color:#A32D2D; text-transform:uppercase;
+  letter-spacing:.04em; margin-bottom:5px; }
+@media(prefers-color-scheme:dark){ .error-label{color:#F09595;} }
+html.force-dark .error-label{ color:#F09595!important; }
+.msg-skip{ background:#FFF8E1!important; border-left-color:#F9A825!important; }
+@media(prefers-color-scheme:dark){ .msg-skip{background:#2a2000!important;} }
+html.force-dark .msg-skip{ background:#2a2000!important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+  <div>
+    <h1>Multi-Agent Collaboration</h1>
+    <div class="sub">Autonomous consensus engine · Anthropic · OpenAI · Grok · Gemini</div>
+  </div>
+  <div class="flex gap8" style="align-items:center;margin-top:4px">
+    <span id="server-status" class="pill"></span>
+    <button onclick="showHistory()" style="font-size:13px;padding:5px 14px">📂 History</button>
+    <button id="settings-btn" onclick="showSettings()" style="font-size:13px;padding:5px 14px">⚙ Settings</button>
+  </div>
+</div>
+
+<!-- SETUP PANEL -->
+<div id="setup-panel">
+  <div class="card">
+    <div class="field">
+      <label>Problem / task</label>
+      <textarea id="problem" rows="4"
+        placeholder="Describe the problem clearly. Include data, constraints, and what a good solution looks like."></textarea>
+    </div>
+    <div class="field">
+      <label>Agent configuration</label>
+      <div class="grid4" id="agent-cards"></div>
+    </div>
+    <hr>
+    <div class="flex gap10 wrap-row items-end">
+      <div class="field" style="margin:0;flex:0 0 auto">
+        <label>Pause every N rounds</label>
+        <select id="pause-every" style="width:100px">
+          <option>5</option><option selected>10</option><option>15</option><option>20</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;flex:0 0 auto">
+        <label>Consensus detection</label>
+        <select id="consensus-mode" style="width:145px">
+          <option value="auto">Auto-detect signal</option>
+          <option value="all">Run to max rounds</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;flex:0 0 auto">
+        <label>Round delay</label>
+        <select id="round-delay" style="width:100px">
+          <option value="0">None</option>
+          <option value="500" selected>500 ms</option>
+          <option value="1000">1 s</option>
+          <option value="2000">2 s</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;flex:0 0 auto">
+        <label>Arbitrator activates</label>
+        <select id="judge-round" style="width:130px">
+          <option value="0">Disabled</option>
+          <option value="5">Round 5</option>
+          <option value="10" selected>Round 10</option>
+          <option value="15">Round 15</option>
+          <option value="20">Round 20</option>
+        </select>
+      </div>
+      <button class="primary" onclick="startSession()" style="align-self:flex-end;padding:8px 22px">
+        Start collaboration ↗
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div id="settings-panel" class="hidden">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <span style="font-size:15px;font-weight:500">⚙ Settings</span>
+      <button onclick="hideSettings()" style="font-size:12px;padding:5px 12px">← Back</button>
+    </div>
+
+    <!-- Model tier -->
+    <div class="sec-hdr">Model tier</div>
+    <div class="field">
+      <div class="radio-group" id="tier-radios">
+        <label class="radio-opt active" id="tier-economy">
+          <input type="radio" name="tier" value="economy" checked> Economy
+        </label>
+        <label class="radio-opt" id="tier-standard">
+          <input type="radio" name="tier" value="standard"> Standard
+        </label>
+        <label class="radio-opt" id="tier-premium">
+          <input type="radio" name="tier" value="premium"> Premium
+        </label>
+      </div>
+      <div class="tier-preview" id="tier-preview" style="margin-top:12px"></div>
+      <div class="hint" style="margin-top:8px">
+        Economy is 10–20× cheaper with minimal reasoning quality impact.
+        Premium selects the most capable available model per provider.
+      </div>
+    </div>
+    <div class="field">
+      <label>Per-agent tier override</label>
+      <div class="grid4" id="tier-overrides"></div>
+      <div class="hint">Set to "Follow global" to use the tier above, or force a specific tier for one provider.</div>
+    </div>
+
+    <hr>
+
+    <!-- Response quality -->
+    <div class="sec-hdr">Response quality</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Max tokens per response</label>
+        <select id="s-max-tokens">
+          <option value="500">500 — very concise</option>
+          <option value="1000" selected>1000 — standard</option>
+          <option value="1500">1500 — detailed</option>
+          <option value="2000">2000 — comprehensive</option>
+        </select>
+        <div class="hint">Lower = faster + cheaper. Affects all four providers.</div>
+      </div>
+      <div class="field">
+        <label>Response verbosity</label>
+        <select id="s-verbosity">
+          <option value="concise">Concise — 1 to 2 paragraphs</option>
+          <option value="standard" selected>Standard — 2 to 4 paragraphs</option>
+          <option value="detailed">Detailed — 4 to 6 paragraphs</option>
+        </select>
+        <div class="hint">Injected into each agent's system prompt as an instruction.</div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Session defaults -->
+    <div class="sec-hdr">Session defaults</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Default max rounds</label>
+        <select id="s-max-rounds">
+          <option>20</option><option>30</option><option selected>50</option>
+          <option>100</option><option value="0">Unlimited</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Default pause every N rounds</label>
+        <select id="s-pause-every">
+          <option>5</option><option selected>10</option><option>15</option><option>20</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Default round delay</label>
+        <select id="s-round-delay">
+          <option value="0">None</option>
+          <option value="500" selected>500 ms</option>
+          <option value="1000">1 s</option>
+          <option value="2000">2 s</option>
+        </select>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Consensus sensitivity -->
+    <div class="sec-hdr">Consensus detection</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Detection mode</label>
+        <select id="s-consensus-mode">
+          <option value="auto">Auto-detect (agent self-certification)</option>
+          <option value="all">Run to max rounds</option>
+        </select>
+        <div class="hint">Auto-detect: each agent self-certifies consensus at the end of their response from round 3 onward. ALL agents must certify YES with no remaining disagreements on any topic for consensus to trigger. No extra API calls required.</div>
+      </div>
+      <div class="field">
+        <label>Additional consensus phrases</label>
+        <textarea id="s-consensus-phrases" rows="3"
+          placeholder="Not used in AI evaluation mode. Kept for reference only."></textarea>
+        <div class="hint">Legacy keyword list — ignored when AI evaluation is active.</div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Synthesis & analysis agents -->
+    <div class="sec-hdr">Checkpoint analysis agent</div>
+    <div class="field">
+      <label>Disagreement analysis written by</label>
+      <select id="s-analysis-agent">
+        <option value="auto">Auto (random dissenting agent)</option>
+      </select>
+      <div class="hint">At each pause checkpoint, an agent that certified NO writes the disagreement bullets. Override to always use a specific provider.</div>
+    </div>
+
+    <hr>
+
+    <!-- Display -->
+    <div class="sec-hdr">Display</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Color mode</label>
+        <select id="s-color-mode">
+          <option value="system">System default</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <div class="hint">Override your OS preference for this app only.</div>
+      </div>
+      <div class="field">
+        <label>Thread height</label>
+        <select id="s-thread-height">
+          <option value="360">Compact — 360 px</option>
+          <option value="560" selected>Normal — 560 px</option>
+          <option value="760">Tall — 760 px</option>
+          <option value="1000">Full — 1000 px</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>System messages</label>
+        <label class="check-opt active" id="chk-sys-msg" style="width:fit-content">
+          <input type="checkbox" id="s-show-sys" checked
+            onchange="this.closest('.check-opt').classList.toggle('active',this.checked)">
+          Show in conversation thread
+        </label>
+        <div class="hint">System messages are round markers, agent drops, and status notices.</div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Export -->
+    <div class="sec-hdr">Export</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Export format</label>
+        <select id="s-export-format">
+          <option value="text" selected>Plain text (.txt)</option>
+          <option value="markdown">Markdown (.md)</option>
+          <option value="json">JSON (.json)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Export content</label>
+        <label class="check-opt" id="chk-export-sys" style="width:fit-content">
+          <input type="checkbox" id="s-export-sys"
+            onchange="this.closest('.check-opt').classList.toggle('active',this.checked)">
+          Include system messages
+        </label>
+      </div>
+    </div>
+
+    <hr>
+    <div class="flex gap8 wrap-row">
+      <button class="primary" onclick="saveSettings()">Save settings</button>
+      <button onclick="resetSettings()">Reset to defaults</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY PANEL -->
+<div id="history-panel" class="hidden">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:15px;font-weight:500">📂 Session history</span>
+      <button onclick="hideHistory()" style="font-size:12px;padding:5px 12px">← Back</button>
+    </div>
+    <div id="history-list" style="font-size:13px">Loading…</div>
+  </div>
+
+  <!-- Session detail view -->
+  <div id="history-detail" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:500" id="hd-title">Session</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px" id="hd-meta"></div>
+        </div>
+        <div class="flex gap8">
+          <button onclick="exportHistorySession()" style="font-size:12px;padding:5px 12px">Export</button>
+          <button onclick="deleteHistorySession()" style="font-size:12px;padding:5px 12px;color:var(--text2)">Delete</button>
+          <button onclick="hideHistoryDetail()" style="font-size:12px;padding:5px 12px">← List</button>
+        </div>
+      </div>
+      <div style="background:var(--bg2);border-radius:var(--r);padding:10px 13px;margin-bottom:12px;font-size:13px;line-height:1.6" id="hd-problem"></div>
+      <div id="hd-thread" style="max-height:600px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+<div id="convo-panel" class="hidden">
+  <div class="card" style="padding-bottom:10px">
+    <div class="flex gap10 wrap-row" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="legend" id="legend"></div>
+      <div class="flex gap8">
+        <button id="stop-btn" class="stop" onclick="stopSession()" style="font-size:12px;padding:5px 12px">⏹ Stop</button>
+        <button onclick="exportTranscript()" style="font-size:12px;padding:5px 12px">Export</button>
+        <button onclick="showLogs()" style="font-size:12px;padding:5px 12px">📋 Logs</button>
+        <button onclick="confirmReset()" style="font-size:12px;padding:5px 12px">Reset</button>
+      </div>
+    </div>
+    <div class="rbar">
+      <span>Round</span>
+      <span class="rnum" id="round-num">0</span>
+      <span id="round-max" style="color:var(--text3)"></span>
+      <span style="flex:1"></span>
+      <span id="cost-display" style="font-size:12px;color:var(--text2);margin-right:12px"></span>
+      <span id="session-state" style="font-size:12px;color:var(--text2)">Starting…</span>
+    </div>
+    <div id="thread"></div>
+    <div class="sbar hidden" id="sbar">
+      <div class="typing"><span></span><span></span><span></span></div>
+      <span id="sbar-txt"></span>
+    </div>
+    <!-- Shown when operator hits Stop — no auto-synthesis -->
+    <div id="stopped-actions" class="hidden" style="padding:10px 0 4px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="primary" onclick="generateSynthesisManual()">Generate synthesis ↗</button>
+      <button onclick="exportTranscript()">Export transcript</button>
+      <button onclick="confirmReset()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Pause panel -->
+  <div id="pause-panel" class="hidden">
+    <div class="pause-wrap">
+      <div class="pause-title" id="pause-title">⏸ Checkpoint</div>
+      <div class="pause-sub" id="pause-sub"></div>
+      <div class="field mb12">
+        <div class="pause-lbl">Disagreement analysis</div>
+        <div class="disagree-box" id="disagree-box">Analyzing…</div>
+      </div>
+      <div class="field mb12">
+        <div class="pause-lbl">Operator guidance
+          <span style="font-weight:400;text-transform:none;letter-spacing:0">
+            (optional — leave blank to resume as-is)
+          </span>
+        </div>
+        <textarea id="op-guidance" rows="3"
+          placeholder="Add context, new constraints, or direction to steer agents toward agreement. Injected into every agent's system prompt going forward."
+          style="border-color:rgba(186,117,23,0.4)"></textarea>
+      </div>
+      <div class="flex gap8 wrap-row">
+        <button class="primary" id="resume-btn" onclick="resumeSession()">Resume collaboration ↗</button>
+        <button id="end-btn" onclick="endSession()">End &amp; synthesize now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drop confirmation panel -->
+  <div id="drop-panel" class="hidden">
+    <div class="drop-wrap">
+      <div class="drop-title" id="drop-title">⚠ Agent dropped</div>
+      <div class="drop-sub" id="drop-sub"></div>
+      <div class="error-label">Error reason</div>
+      <div class="drop-reason" id="drop-reason"></div>
+      <div class="error-label" style="margin-bottom:6px">Remaining agents</div>
+      <div id="drop-remaining" style="font-size:13px;color:var(--text);margin-bottom:16px"></div>
+      <div class="flex gap8 wrap-row">
+        <button class="primary" id="drop-continue-btn">Continue without this agent ↗</button>
+        <button id="drop-end-btn">End &amp; synthesize now</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /convo-panel -->
+
+<!-- AGENT PROMPT LOG PANEL — shown outside convo-panel so it survives resets -->
+<div id="log-panel" class="hidden" style="margin-top:14px">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <span style="font-size:15px;font-weight:500">📋 Logs</span>
+      <div class="flex gap8">
+        <button id="log-view-session" onclick="switchLogView('session')"
+          style="font-size:12px;padding:5px 12px;background:#534AB7;color:#fff;border-color:#534AB7">Session</button>
+        <button id="log-view-server" onclick="switchLogView('server')"
+          style="font-size:12px;padding:5px 12px">Server logs</button>
+        <button onclick="hideLogs()" style="font-size:12px;padding:5px 12px">✕ Close</button>
+      </div>
+    </div>
+
+    <!-- Session prompt log -->
+    <div id="log-session-view">
+      <div id="log-agent-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div id="log-entries" style="max-height:600px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Server log browser -->
+    <div id="log-server-view" class="hidden">
+      <div style="margin-bottom:12px;font-size:13px;color:var(--text2)">
+        Server logs are written to <code style="background:var(--bg3);padding:2px 6px;border-radius:4px">/opt/multiagent/logs/</code>
+        and rotated daily. Click a date to download.
+      </div>
+      <div id="server-log-list" style="font-size:13px">Loading…</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+<script>
+// ─── Provider definitions ─────────────────────────────────────────────────────
+const PROVIDERS = [
+  { id:'anthropic', name:'Anthropic', dot:'#7F77DD',
+    models:['claude-haiku-4-5','claude-sonnet-4-20250514'],
+    persona:'Analytical lens: logical structure, evidence quality, and precise reasoning. Prioritizes accuracy over novelty.' },
+  { id:'openai', name:'OpenAI', dot:'#1D9E75',
+    models:['gpt-4o-mini','gpt-4o'],
+    persona:'Analytical lens: practical implementation, resource constraints, and measurable outcomes. Prioritizes actionability.' },
+  { id:'grok', name:'Grok', dot:'#BA7517',
+    models:['grok-3-mini','grok-3'],
+    persona:'Analytical lens: unstated assumptions, edge cases, and contrarian positions. Prioritizes stress-testing over agreement.' },
+  { id:'gemini', name:'Gemini', dot:'#378ADD',
+    models:['gemini-2.5-flash','gemini-2.5-pro'],
+    persona:'Analytical lens: breadth of considerations, second-order effects, and synthesis across domains. Prioritizes completeness.' }
+];
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'multiagent_settings_v2';
+const DEFAULT_SETTINGS = {
+  modelTier:'economy',
+  agentTierOverride:{ anthropic:'global', openai:'global', grok:'global', gemini:'global' },
+  maxTokens:1000,
+  verbosity:'standard',
+  defaultMaxRounds:'50',
+  defaultPauseEvery:'10',
+  defaultRoundDelay:'500',
+  defaultConsensusMode:'auto',
+  consensusMin:'majority',
+  consensusPhrases:'',
+  synthesisAgent:'auto',
+  analysisAgent:'auto',
+  colorMode:'system',
+  showSysMessages:true,
+  threadHeight:560,
+  exportFormat:'text',
+  exportSys:false
+};
+
+const TIER_PREFERRED = {
+  economy:  { anthropic:['claude-haiku-4-5','claude-haiku'],
+              openai:   ['gpt-4o-mini','gpt-3.5-turbo'],
+              grok:     ['grok-3-mini'],
+              gemini:   ['gemini-2.5-flash','gemini-2.0-flash-lite'] },
+  standard: { anthropic:['claude-sonnet-4-20250514','claude-sonnet'],
+              openai:   ['gpt-4o'],
+              grok:     ['grok-3'],
+              gemini:   ['gemini-2.5-flash'] },
+  premium:  { anthropic:['claude-opus-4','claude-opus','claude-sonnet-4-20250514'],
+              openai:   ['gpt-4o','gpt-4-turbo'],
+              grok:     ['grok-3'],
+              gemini:   ['gemini-2.5-pro','gemini-2.5-flash'] }
+};
+
+const TIER_LABELS = {
+  economy:  { anthropic:'Haiku',  openai:'GPT-4o mini', grok:'Grok-3 mini', gemini:'2.5 Flash' },
+  standard: { anthropic:'Sonnet', openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Flash' },
+  premium:  { anthropic:'Opus',   openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Pro'   }
+};
+
+const VERBOSITY_PROMPTS = {
+  concise: 'Keep your response to 1–2 focused paragraphs.',
+  standard:'Keep your response to 2–4 paragraphs.',
+  detailed:'Provide a thorough response of 4–6 paragraphs.'
+};
+
+let CFG = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  try {
+    const s = localStorage.getItem(SETTINGS_KEY);
+    if (s) CFG = { ...DEFAULT_SETTINGS, ...JSON.parse(s) };
+  } catch(e) { CFG = { ...DEFAULT_SETTINGS }; }
+}
+
+function applyColorMode() {
+  document.documentElement.classList.remove('force-light','force-dark');
+  if (CFG.colorMode === 'light') document.documentElement.classList.add('force-light');
+  if (CFG.colorMode === 'dark')  document.documentElement.classList.add('force-dark');
+}
+
+// Build <option> list for agent selectors — called when settings panel opens
+// so it reflects whichever providers are currently configured
+function buildAgentOptions(selectedValue) {
+  const auto = `<option value="auto"${selectedValue==='auto'?' selected':''}>Auto (random from active agents)</option>`;
+  const opts = PROVIDERS.map(p => {
+    const cfg = !!providerStatus[p.id];
+    const label = p.name + (cfg ? '' : ' (not configured)');
+    return `<option value="${p.id}"${selectedValue===p.id?' selected':''}>${label}</option>`;
+  }).join('');
+  return auto + opts;
+}
+
+function getAgentForRole(role) {
+  const pref = role === 'synthesis' ? CFG.synthesisAgent : CFG.analysisAgent;
+  if (!pref || pref === 'auto') {
+    // No preference — pick randomly from active agents, no provider bias
+    return S.agents[Math.floor(Math.random() * S.agents.length)];
+  }
+  return S.agents.find(a => a.id === pref) || S.agents[Math.floor(Math.random() * S.agents.length)];
+}
+
+function saveSettings() {
+  CFG.modelTier         = document.querySelector('input[name="tier"]:checked')?.value || 'economy';
+  CFG.maxTokens         = parseInt($('s-max-tokens').value);
+  CFG.verbosity         = $('s-verbosity').value;
+  CFG.defaultMaxRounds  = $('s-max-rounds').value;
+  CFG.defaultPauseEvery = $('s-pause-every').value;
+  CFG.defaultRoundDelay = $('s-round-delay').value;
+  CFG.defaultConsensusMode = $('s-consensus-mode').value;
+  CFG.consensusPhrases  = $('s-consensus-phrases').value;
+  CFG.showSysMessages   = $('s-show-sys').checked;
+  CFG.threadHeight      = parseInt($('s-thread-height').value);
+  CFG.analysisAgent     = $('s-analysis-agent').value;
+  CFG.colorMode         = $('s-color-mode').value;
+  CFG.exportFormat      = $('s-export-format').value;
+  CFG.exportSys         = $('s-export-sys').checked;
+  PROVIDERS.forEach(p => {
+    const sel = $('override-'+p.id);
+    if (sel) CFG.agentTierOverride[p.id] = sel.value;
+  });
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(CFG));
+  applyColorMode();
+  applySettingsToSetupForm();
+  applyTierToAllDropdowns();
+  const btn = document.querySelector('#settings-panel button.primary');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Saved';
+  setTimeout(() => { btn.textContent = orig; hideSettings(); }, 700);
+}
+
+function resetSettings() {
+  if (!confirm('Reset all settings to defaults?')) return;
+  CFG = { ...DEFAULT_SETTINGS };
+  localStorage.removeItem(SETTINGS_KEY);
+  populateSettingsForm();
+  applySettingsToSetupForm();
+  applyTierToAllDropdowns();
+}
+
+function populateSettingsForm() {
+  document.querySelectorAll('input[name="tier"]').forEach(r => {
+    r.checked = r.value === CFG.modelTier;
+    r.closest('.radio-opt').classList.toggle('active', r.checked);
+  });
+  updateTierPreview(CFG.modelTier);
+  PROVIDERS.forEach(p => { const s=$('override-'+p.id); if(s) s.value=CFG.agentTierOverride[p.id]||'global'; });
+  const setV = (id,v) => { const e=$(id); if(e) e.value=v; };
+  setV('s-max-tokens',      CFG.maxTokens);
+  setV('s-verbosity',       CFG.verbosity);
+  setV('s-max-rounds',      CFG.defaultMaxRounds);
+  setV('s-pause-every',     CFG.defaultPauseEvery);
+  setV('s-round-delay',     CFG.defaultRoundDelay);
+  setV('s-consensus-mode',  CFG.defaultConsensusMode);
+  setV('s-thread-height',   CFG.threadHeight);
+  setV('s-color-mode',      CFG.colorMode);
+  setV('s-export-format',   CFG.exportFormat);
+  // Agent selectors are built dynamically so they reflect current providerStatus
+  const anlSel = $('s-analysis-agent');
+  if (anlSel) anlSel.innerHTML = buildAgentOptions(CFG.analysisAgent);
+  $('s-consensus-phrases').value = CFG.consensusPhrases||'';
+  $('s-show-sys').checked  = CFG.showSysMessages;
+  $('s-export-sys').checked = CFG.exportSys;
+  $('chk-sys-msg').classList.toggle('active', CFG.showSysMessages);
+  $('chk-export-sys').classList.toggle('active', CFG.exportSys);
+}
+
+function applySettingsToSetupForm() {
+  const setV = (id,v) => { const e=$(id); if(e) e.value=v; };
+  setV('pause-every',   CFG.defaultPauseEvery);
+  setV('round-delay',   CFG.defaultRoundDelay);
+  setV('consensus-mode',CFG.defaultConsensusMode);
+  setV('judge-round',   CFG.defaultJudgeRound ?? '10');
+}
+
+function updateTierPreview(tier) {
+  const lbl = TIER_LABELS[tier]||TIER_LABELS.economy;
+  $('tier-preview').innerHTML = PROVIDERS.map(p=>
+    `<div class="tier-cell"><strong>${p.name}</strong>${lbl[p.id]||'—'}</div>`
+  ).join('');
+}
+
+function buildTierOverrides() {
+  const opts=`<option value="global">Follow global</option>
+    <option value="economy">Economy</option>
+    <option value="standard">Standard</option>
+    <option value="premium">Premium</option>`;
+  $('tier-overrides').innerHTML = PROVIDERS.map(p=>`
+    <div>
+      <label style="margin-bottom:4px">
+        <span class="dot" style="background:${p.dot};display:inline-block;vertical-align:middle;margin-right:4px"></span>
+        ${p.name}
+      </label>
+      <select id="override-${p.id}" style="font-size:12px">${opts}</select>
+    </div>`
+  ).join('');
+  PROVIDERS.forEach(p=>{ const s=$('override-'+p.id); if(s) s.value=CFG.agentTierOverride[p.id]||'global'; });
+}
+
+function showSettings() {
+  populateSettingsForm();
+  $('setup-panel').classList.add('hidden');
+  $('settings-panel').classList.remove('hidden');
+  $('settings-btn').textContent='← Setup';
+  $('settings-btn').onclick=hideSettings;
+}
+
+function hideSettings() {
+  $('settings-panel').classList.add('hidden');
+  $('setup-panel').classList.remove('hidden');
+  $('settings-btn').textContent='⚙ Settings';
+  $('settings-btn').onclick=showSettings;
+}
+
+// ─── Tier / model selection ───────────────────────────────────────────────────
+function effectiveTier(id) {
+  const ov=CFG.agentTierOverride[id];
+  return (!ov||ov==='global')?CFG.modelTier:ov;
+}
+
+function pickModelForTier(id, models) {
+  const tier=effectiveTier(id);
+  const prefs=(TIER_PREFERRED[tier]||TIER_PREFERRED.economy)[id]||[];
+  for (const pref of prefs) {
+    const found=models.find(m=>m===pref||m.includes(pref));
+    if(found) return found;
+  }
+  return models.find(m=>/mini|flash|lite|haiku/.test(m))||models[0];
+}
+
+function applyTierToAllDropdowns() {
+  PROVIDERS.forEach(p=>applyTierToDropdown(p.id,p.models));
+}
+
+function applyTierToDropdown(id, models) {
+  const sel=$('model-'+id);
+  if(!sel||!models.length) return;
+  const chosen=pickModelForTier(id,models);
+  Array.from(sel.options).forEach(o=>o.selected=o.value===chosen);
+}
+
+// ─── Model fetching ───────────────────────────────────────────────────────────
+function parseModels(id, data) {
+  try {
+    switch(id){
+      case 'anthropic': return (data.data||[]).map(m=>m.id)
+        .filter(m=>m.startsWith('claude-'))
+        .sort((a,b)=>b.localeCompare(a));
+      case 'openai': {
+        const all = (data.data||[]).map(m=>m.id);
+        return all.filter(m=>
+          (
+            /^gpt-4o/.test(m)                          || // gpt-4o, gpt-4o-mini, gpt-4o-2024-…
+            /^gpt-4-turbo/.test(m)                     || // gpt-4-turbo, gpt-4-turbo-preview
+            /^gpt-4$/.test(m)                          || // gpt-4 exactly
+            /^gpt-4-\d{4}/.test(m)                     || // gpt-4-0613, gpt-4-0125-preview
+            /^gpt-3\.5-turbo(?!-instruct)/.test(m)     || // gpt-3.5-turbo but NOT instruct
+            /^o[1-9](-|$)/.test(m)                        // o1, o3, o4, o1-mini, o3-mini, o4-mini
+          ) && !/transcribe|translate|realtime|audio|tts|vision-preview|instruct|search|embed|base/.test(m)
+        ).sort((a,b)=>b.localeCompare(a));
+      }
+      case 'grok': return (data.data||[]).map(m=>m.id)
+        .filter(m=>m.startsWith('grok-'))
+        .sort((a,b)=>b.localeCompare(a));
+      case 'gemini': return (data.models||[])
+        .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
+        .map(m=>m.name.replace('models/',''))
+        .filter(m=>m.startsWith('gemini-')&&
+          !['embed','tts','vision','imagen','veo','audio','robotics','lyria','aqa','research','computer-use'].some(x=>m.includes(x)))
+        .sort((a,b)=>b.localeCompare(a));
+      default: return [];
+    }
+  } catch(e){ return []; }
+}
+
+async function fetchModels(id) {
+  const sel=$('model-'+id), btn=$('refresh-'+id), lbl=$('model-status-'+id);
+  if(!sel||!btn||!providerStatus[id]) return;
+  btn.textContent='↻'; btn.disabled=true; sel.disabled=true;
+  if(lbl) lbl.textContent='Fetching…';
+  try {
+    const r=await fetch(`/api/${id}/models`);
+    const data=await r.json();
+    if(data.error) throw new Error(data.error.message);
+    const models=parseModels(id,data);
+    if(!models.length) throw new Error('No chat models returned');
+    const p=PROVIDERS.find(p=>p.id===id); if(p) p.models=models;
+    const chosen=pickModelForTier(id,models);
+    sel.innerHTML=models.map(m=>`<option${m===chosen?' selected':''}>${m}</option>`).join('');
+    if(lbl) lbl.textContent=`${models.length} models · default: ${chosen}`;
+    btn.textContent='✓'; btn.style.color='#1D9E75';
+    setTimeout(()=>{ btn.textContent='⟳'; btn.style.color=''; },2000);
+  } catch(e){
+    if(lbl) lbl.textContent='Fetch failed — using defaults';
+    btn.textContent='✗'; btn.style.color='#BA7517'; btn.title=e.message;
+    setTimeout(()=>{ btn.textContent='⟳'; btn.style.color=''; btn.title=''; },3000);
+  } finally { btn.disabled=false; sel.disabled=false; }
+}
+
+async function fetchAllModels() {
+  await Promise.allSettled(PROVIDERS.filter(p=>providerStatus[p.id]).map(p=>fetchModels(p.id)));
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+let providerStatus={}, enabled={}, S=null;
+
+async function init() {
+  loadSettings();
+  applyColorMode();
+  const statusEl=$('server-status');
+  try {
+    const r=await fetch('/api/status');
+    providerStatus=await r.json();
+    const n=Object.values(providerStatus).filter(Boolean).length;
+    statusEl.textContent=n+' provider'+(n!==1?'s':'')+' ready';
+    statusEl.className='pill pill-ok';
+  } catch(e){
+    statusEl.textContent='Server unreachable'; statusEl.className='pill pill-bad';
+    PROVIDERS.forEach(p=>providerStatus[p.id]=false);
+  }
+  PROVIDERS.forEach(p=>enabled[p.id]=!!providerStatus[p.id]);
+  buildCards();
+  buildTierOverrides();
+  applySettingsToSetupForm();
+  // Wire tier radio events
+  document.querySelectorAll('input[name="tier"]').forEach(r=>{
+    r.addEventListener('change',()=>{
+      document.querySelectorAll('.radio-opt').forEach(e=>e.classList.remove('active'));
+      r.closest('.radio-opt').classList.add('active');
+      updateTierPreview(r.value);
+    });
+  });
+  await fetchAllModels();
+}
+
+function buildCards() {
+  $('agent-cards').innerHTML=PROVIDERS.map(p=>{
+    const cfg=!!providerStatus[p.id], on=enabled[p.id]&&cfg;
+    return `
+    <div class="acard ${on?'on':'off'}" id="card-${p.id}">
+      <div class="acard-head">
+        <div class="acard-name"><span class="dot" style="background:${p.dot}"></span>${p.name}</div>
+        <div class="flex gap8" style="align-items:center">
+          <span class="tog-lbl" id="tl-${p.id}">${on?'On':'Off'}</span>
+          <div class="toggle ${on?'on':''}" id="tog-${p.id}" onclick="toggleAgent('${p.id}')"></div>
+        </div>
+      </div>
+      <div class="mb12">
+        <span class="pill ${cfg?'pill-ok':'pill-bad'}">${cfg?'Configured':'No key'}</span>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <label style="margin:0">Model</label>
+          <button id="refresh-${p.id}" onclick="fetchModels('${p.id}')" title="Refresh model list"
+            style="font-size:12px;padding:1px 7px;border-radius:4px;opacity:${cfg?1:.4}"
+            ${cfg?'':'disabled'}>⟳</button>
+        </div>
+        <select id="model-${p.id}">
+          ${p.models.map((m,i)=>`<option${!i?' selected':''}>${m}</option>`).join('')}
+        </select>
+        <div id="model-status-${p.id}" class="hint">${cfg?'Fetching live models…':''}</div>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Analytical lens</label>
+        <textarea id="persona-${p.id}" rows="2" style="font-size:12px">${p.persona}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleAgent(id) {
+  if(!providerStatus[id]){ alert(`${id} has no API key.\nAdd ${id.toUpperCase()}_API_KEY to .env and restart.`); return; }
+  enabled[id]=!enabled[id];
+  const on=enabled[id];
+  $('tog-'+id).className='toggle '+(on?'on':'');
+  $('tl-'+id).textContent=on?'On':'Off';
+  $('card-'+id).className='acard '+(on?'on':'off');
+}
+
+// ─── API calls ────────────────────────────────────────────────────────────────
+function newAbort(){
+  if(S?.abortController){ try{S.abortController.abort();}catch(_){} }
+  const ac=new AbortController(); if(S) S.abortController=ac; return ac.signal;
+}
+
+// All API call functions accept an explicit signal so parallel calls
+// within a round share one AbortController — Stop kills all at once.
+
+function sessionHeaders(agentName) {
+  return {
+    'Content-Type'  : 'application/json',
+    'X-Session-Id'  : S?.sessionId  || 'unknown',
+    'X-Round'       : String(S?.round || 0),
+    'X-Agent-Name'  : agentName || 'unknown'
+  };
+}
+
+async function callAnthropic(model,sys,usr,agentName,signal) {
+  const r=await fetch('/api/anthropic',{method:'POST',signal,
+    headers:sessionHeaders(agentName),
+    body:JSON.stringify({model,max_tokens:CFG.maxTokens,system:sys,messages:[{role:'user',content:usr}]})});
+  const d=await r.json(); if(d.error) throw new Error('Anthropic: '+d.error.message);
+  return {text:d.content.filter(b=>b.type==='text').map(b=>b.text).join(''),
+          inputTokens:d.usage?.input_tokens||0, outputTokens:d.usage?.output_tokens||0};
+}
+async function callOpenAI(model,sys,usr,agentName,signal) {
+  const r=await fetch('/api/openai',{method:'POST',signal,
+    headers:sessionHeaders(agentName),
+    body:JSON.stringify({model,max_tokens:CFG.maxTokens,messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
+  const d=await r.json(); if(d.error) throw new Error('OpenAI: '+d.error.message);
+  return {text:d.choices[0].message.content,
+          inputTokens:d.usage?.prompt_tokens||0, outputTokens:d.usage?.completion_tokens||0};
+}
+async function callGrok(model,sys,usr,agentName,signal) {
+  const r=await fetch('/api/grok',{method:'POST',signal,
+    headers:sessionHeaders(agentName),
+    body:JSON.stringify({model,max_tokens:CFG.maxTokens,messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
+  const d=await r.json(); if(d.error) throw new Error('Grok: '+(d.error.message||JSON.stringify(d.error)));
+  return {text:d.choices[0].message.content,
+          inputTokens:d.usage?.prompt_tokens||0, outputTokens:d.usage?.completion_tokens||0};
+}
+async function callGemini(model,sys,usr,agentName,signal) {
+  const r=await fetch('/api/gemini',{method:'POST',signal,
+    headers:sessionHeaders(agentName),
+    body:JSON.stringify({model,system_instruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text:usr}]}]})});
+  const d=await r.json(); if(d.error) throw new Error('Gemini: '+d.error.message);
+  return {text:d.candidates[0].content.parts[0].text,
+          inputTokens:d.usageMetadata?.promptTokenCount||0, outputTokens:d.usageMetadata?.candidatesTokenCount||0};
+}
+async function dispatch(agent,sys,usr,signal) {
+  switch(agent.id){
+    case 'anthropic': return callAnthropic(agent.model,sys,usr,agent.name,signal);
+    case 'openai':    return callOpenAI(agent.model,sys,usr,agent.name,signal);
+    case 'grok':      return callGrok(agent.model,sys,usr,agent.name,signal);
+    case 'gemini':    return callGemini(agent.model,sys,usr,agent.name,signal);
+  }
+}
+
+// ─── Model pricing ── $/1M tokens ────────────────────────────────────────────
+const MODEL_PRICING = {
+  // Anthropic
+  'claude-haiku-4-5':          { in:0.80,  out:4.00  },
+  'claude-sonnet-4-20250514':  { in:3.00,  out:15.00 },
+  'claude-opus-4':             { in:15.00, out:75.00  },
+  // OpenAI
+  'gpt-4o-mini':  { in:0.15,  out:0.60  },
+  'gpt-4o':       { in:2.50,  out:10.00 },
+  'gpt-4-turbo':  { in:10.00, out:30.00 },
+  'gpt-3.5-turbo':{ in:0.50,  out:1.50  },
+  'o1':           { in:15.00, out:60.00  },
+  'o1-mini':      { in:1.10,  out:4.40  },
+  'o3':           { in:10.00, out:40.00  },
+  'o3-mini':      { in:1.10,  out:4.40  },
+  'o4-mini':      { in:1.10,  out:4.40  },
+  // Grok
+  'grok-3-mini':  { in:0.30,  out:0.50  },
+  'grok-3':       { in:3.00,  out:15.00 },
+  // Gemini
+  'gemini-2.5-flash': { in:0.075, out:0.30 },
+  'gemini-2.5-pro':   { in:1.25,  out:10.00 },
+  'gemini-2.0-flash': { in:0.075, out:0.30  },
+  'gemini-1.5-flash': { in:0.075, out:0.30  },
+  'gemini-1.5-pro':   { in:1.25,  out:5.00  },
+};
+
+function modelPricing(model) {
+  if(MODEL_PRICING[model]) return MODEL_PRICING[model];
+  // Prefix match for dated variants like gpt-4o-2024-11-20
+  const key = Object.keys(MODEL_PRICING).find(k => model.startsWith(k));
+  return key ? MODEL_PRICING[key] : {in:0, out:0};
+}
+
+function tokenCost(inputTokens, outputTokens, model) {
+  const p = modelPricing(model);
+  return (inputTokens * p.in + outputTokens * p.out) / 1_000_000;
+}
+
+function updateCostDisplay() {
+  if(!S) return;
+  const total = S.totalCost || 0;
+  const el = $('cost-display');
+  if(el) el.textContent = `$${total.toFixed(4)}`;
+  // Update legend items with per-agent costs
+  (S.agents||[]).forEach(a => {
+    const cost = (S.agentCosts||{})[a.id] || 0;
+    const li = document.querySelector(`#legend .legend-item[data-id="${a.id}"] span:last-child`);
+    if(li) li.textContent = `${a.name} · ${a.model} · $${cost.toFixed(4)}`;
+  });
+}
+
+function trackCost(agent, inputTokens, outputTokens) {
+  if(!S) return;
+  const cost = tokenCost(inputTokens, outputTokens, agent.model);
+  S.agentCosts = S.agentCosts || {};
+  S.agentCosts[agent.id] = (S.agentCosts[agent.id] || 0) + cost;
+  S.totalCost = (S.totalCost || 0) + cost;
+  updateCostDisplay();
+}
+
+// ─── Error helpers ────────────────────────────────────────────────────────────
+const TRANSIENT=['high demand','rate limit','quota','try again later','temporarily',
+  'overloaded','503','529','capacity','spike','server had an error','sorry about that',
+  'internal server error','service unavailable','bad gateway','502','500'];
+const MODEL_ERR=['no longer available','not found for api',
+  'not supported for generatecontent','is not found',
+  'not a chat model','not supported in the v1/chat'];
+const isTransient=m=>TRANSIENT.some(p=>m.toLowerCase().includes(p));
+const isModelError=m=>MODEL_ERR.some(p=>m.toLowerCase().includes(p));
+
+async function dispatchWithRetry(agent,sys,usr,signal){
+  const providerModels=PROVIDERS.find(p=>p.id===agent.id)?.models??[];
+  let attempt=0; const max=4;
+  while(attempt<max){
+    try{
+      const result = await dispatch(agent,sys,usr,signal);
+      const text = result?.text ?? result; // handle both object and plain string
+      const inputTokens = result?.inputTokens || 0;
+      const outputTokens = result?.outputTokens || 0;
+      trackCost(agent, inputTokens, outputTokens);
+      if(S) S.promptLog.push({
+        agentId:agent.id, name:agent.name, dot:agent.dot, model:agent.model,
+        round:S.round, timestamp:new Date().toISOString(), sys, usr,
+        resp:text, inputTokens, outputTokens,
+        cost: tokenCost(inputTokens, outputTokens, agent.model)
+      });
+      return text;
+    } catch(e){
+      if(e.name==='AbortError') throw e;
+      const msg=e.message||'';
+      if(isModelError(msg)){
+        const idx=providerModels.indexOf(agent.model), next=providerModels[idx+1];
+        if(next){
+          addMsg('sys','','','',`${agent.name}: model "${agent.model}" unavailable — switching to "${next}"`);
+          agent.model=next;
+          const sa=S?.agents?.find(a=>a.id===agent.id); if(sa) sa.model=next;
+          continue;
+        }
+        throw new Error(`${agent.name}: all models exhausted. Last error: ${msg}`);
+      }
+      if(isTransient(msg)&&attempt<max-1){
+        const wait=Math.pow(2,attempt+1)*1000;
+        setStatus(`${agent.name}: busy, retrying in ${wait/1000}s…`);
+        await sleep(wait); attempt++; continue;
+      }
+      throw e;
+    }
+  }
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+function setStatus(txt,show=true){ $('sbar').classList.toggle('hidden',!show); $('sbar-txt').textContent=txt; }
+function setState(txt){ $('session-state').textContent=txt; }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function addMsg(type,name,dot,text,synth=false){
+  if(type==='sys'&&!CFG.showSysMessages) return;
+  const t=$('thread'), d=document.createElement('div');
+  if(type==='sys'){
+    d.className='msg msg-sys'; d.textContent=text;
+  } else {
+    d.className='msg'+(synth?' msg-synth':'');
+    d.style.borderLeftColor=synth?'#639922':dot;
+    d.innerHTML=`<div class="msg-head">
+      <span class="dot" style="background:${synth?'#639922':dot}"></span>
+      <span class="msg-name">${name}${synth?' · final synthesis':''}</span>
+      <span class="msg-round">Round ${S?.round??''}</span>
+    </div><div class="msg-text">${esc(text)}</div>`;
+  }
+  t.appendChild(d); t.scrollTop=t.scrollHeight;
+}
+
+// ─── Consensus evaluation ─────────────────────────────────────────────────────
+// Replaces unreliable keyword matching with a dedicated AI judge call.
+// Fires at the end of each round (round 3+) when auto-detect is on.
+// Returns true only if the judge explicitly says YES — all agents fully agreed.
+
+// ─── Consensus self-certification ────────────────────────────────────────────
+// Each agent appends a structured [CONSENSUS: YES] or [CONSENSUS: NO: reason]
+// tag to their response from round 3 onwards. No extra API call needed.
+// Consensus only fires when ALL active agents certify YES in the same round.
+
+const CERT_RE = /\[CONSENSUS:\s*(YES|NO)[^\]]*\]/i;
+
+function parseCertification(text) {
+  const m = text.match(CERT_RE);
+  if (!m) return null;
+  return m[1].toUpperCase() === 'YES';
+}
+
+function stripCertification(text) {
+  return text.replace(/\n?\[CONSENSUS:[^\]]*\]/gi, '').trim();
+}
+
+function certificationReason(text) {
+  const m = text.match(/\[CONSENSUS:\s*NO[^:]*:\s*([^\]]+)\]/i);
+  return m ? m[1].trim() : 'disagreement noted';
+}
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+async function startSession(){
+  const problem=$('problem').value.trim();
+  if(!problem){ alert('Please enter a problem.'); return; }
+  let agents=PROVIDERS.filter(p=>enabled[p.id]).map(p=>({
+    ...p,
+    model:$('model-'+p.id)?.value||p.models[0],
+    persona:$('persona-'+p.id)?.value||p.persona
+  }));
+  if(agents.length<2){ alert('Please enable at least 2 configured agents.'); return; }
+
+  const judgeRound = parseInt($('judge-round').value) || 0;
+  let judgeAgent = null;
+  if(judgeRound > 0 && agents.length >= 3){
+    // Pick a random agent to hold in reserve as arbitrator
+    const judgeIdx = Math.floor(Math.random() * agents.length);
+    judgeAgent = agents[judgeIdx];
+    agents = agents.filter((_,i) => i !== judgeIdx);
+  }
+
+  const maxRaw = CFG.defaultMaxRounds;
+  const maxRounds = judgeRound > 0 ? judgeRound : (parseInt(maxRaw) || Infinity);
+  S={ problem, agents,
+    maxRounds,
+    pauseEvery:parseInt($('pause-every').value),
+    consensusMode:$('consensus-mode').value,
+    roundDelay:parseInt($('round-delay').value),
+    judgeAgent, judgeRound,
+    round:0, log:[], guidances:[], promptLog:[], consensusReached:false,
+    stopped:false, errorCounts:{}, certifications:{}, lastCertifyingAgent:null,
+    agentCosts:{}, totalCost:0, done:false,
+    sessionId: `s${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`
+  };
+
+  $('thread').style.height=CFG.threadHeight+'px';
+  $('setup-panel').classList.add('hidden');
+  $('convo-panel').classList.remove('hidden');
+  $('stop-btn').disabled=false;
+  $('round-max').textContent='/ '+(isFinite(S.maxRounds)?S.maxRounds:'∞');
+
+  // Build legend — show judge separately if designated
+  $('legend').innerHTML = agents.map(a=>
+    `<div class="legend-item" data-id="${a.id}"><span class="dot" style="background:${a.dot}"></span><span>${a.name} · ${a.model}</span></div>`
+  ).join('') + (judgeAgent
+    ? `<div class="legend-item" data-id="${judgeAgent.id}" style="opacity:0.55">
+        <span class="dot" style="background:${judgeAgent.dot}"></span>
+        <span>${judgeAgent.name} · ⚖ reserve arbitrator</span>
+       </div>`
+    : '');
+
+  addMsg('sys','','','',`Active agents: ${agents.map(a=>a.name).join(', ')}`
+    + (judgeAgent ? ` · ${judgeAgent.name} held in reserve as arbitrator (activates round ${judgeRound})` : ''));
+  addMsg('sys','','','',`Tier: ${CFG.modelTier} · Tokens: ${CFG.maxTokens} · Style: ${CFG.verbosity}`);
+  addMsg('sys','','','',`Pausing every ${S.pauseEvery} rounds for review.`);
+  setState('Running…');
+  await runLoop();
+}
+
+async function runLoop(){
+  while(!S.done){
+    if(S.stopped){ handleStop(); return; }
+    await runOneRound();
+    if(S.done) break;
+    // Judge activates if no consensus by the designated round
+    if(S.judgeAgent && S.judgeRound > 0 && S.round >= S.judgeRound && !S.consensusReached){
+      await callJudge(); return;
+    }
+    if(isFinite(S.maxRounds)&&S.round>=S.maxRounds){
+      addMsg('sys','','','',`Maximum rounds (${S.maxRounds}) reached.`);
+      await generateSynthesis(); return;
+    }
+    if(S.round%S.pauseEvery===0){ await showPause(); return; }
+    if(S.roundDelay>0) await sleep(S.roundDelay);
+  }
+}
+
+async function callJudge(){
+  const judge = S.judgeAgent;
+  S.done = true;
+  addMsg('sys','','','',
+    `⚖ Round ${S.round} — no consensus reached. ${judge.name} enters as arbitrator.`);
+  setState('Arbitrating…');
+  setStatus(`${judge.name} (arbitrator) reviewing full discussion…`);
+
+  // Reveal judge in legend
+  const li = document.querySelector(`#legend .legend-item[data-id="${judge.id}"]`);
+  if(li){ li.style.opacity='1'; li.style.fontWeight='500'; }
+
+  const sys = `You are ${judge.name}, serving as a neutral arbitrator. You have observed this entire discussion without participating. Your role is to:
+1. Identify every unresolved disagreement between the agents.
+2. Make a clear, definitive ruling on each one — state which position is correct and why in one sentence per point.
+3. Do not hedge. Do not say "it depends" without specifying exactly what it depends on and what the answer is in each case.
+Your ruling is final and will form the basis of the final synthesis.`;
+
+  const usr = `Problem: ${S.problem}\n\nFull discussion:\n\n${
+    S.log.map(m=>`[${m.name} · Round ${m.round}]: ${m.text}`).join('\n\n')
+  }\n\nAs arbitrator, identify each unresolved disagreement and rule definitively on it:`;
+
+  let ruling;
+  try{
+    const result = await dispatchWithRetry(judge, sys, usr, null);
+    ruling = result?.text ?? result;
+  } catch(e){
+    // Judge failed — fall back to a random active agent
+    const fallback = S.agents[Math.floor(Math.random() * S.agents.length)];
+    addMsg('sys','','','',`⚠ ${judge.name} arbitration failed (${e.message}) — falling back to ${fallback.name}.`);
+    try {
+      const result = await dispatchWithRetry(fallback, sys, usr, null);
+      ruling = result?.text ?? result;
+    } catch(e2) {
+      ruling = `⚠ Arbitration failed: ${e2.message}`;
+    }
+  }
+  setStatus('',false);
+
+  // Display ruling with distinct styling
+  const thread = $('thread');
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.style.cssText = `border-left-color:${judge.dot};background:var(--bg2)`;
+  div.innerHTML = `<div class="msg-head">
+    <span class="dot" style="background:${judge.dot}"></span>
+    <span class="msg-name" style="font-weight:600">${judge.name} · ⚖ Arbitrator ruling</span>
+    <span class="msg-round">Round ${S.round}</span>
+  </div><div class="msg-text">${esc(ruling)}</div>`;
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+
+  S.log.push({agentId:judge.id, name:`${judge.name} (Arbitrator)`, dot:judge.dot, round:S.round, text:ruling});
+
+  // Judge writes the synthesis — they have the full picture
+  S.lastCertifyingAgent = judge;
+  S.judgeRuling = ruling;
+  await generateSynthesis();
+}
+
+// ─── Shuffle utility ─────────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function runOneRound(){
+  S.round++; S.certifications={};
+  $('round-num').textContent = S.round;
+
+  const independent = S.round === 1;
+  const nearEnd     = isFinite(S.maxRounds) && S.round >= S.maxRounds * 0.8;
+  const certRound   = !independent && S.consensusMode === 'auto' && S.round >= 3;
+  const guidanceBlock = S.guidances.length > 0
+    ? '\n\nOPERATOR GUIDANCE:\n' + S.guidances.map(g=>`  [After round ${g.afterRound}]: "${g.text}"`).join('\n')
+    : '';
+  const verbNote = VERBOSITY_PROMPTS[CFG.verbosity] || VERBOSITY_PROMPTS.standard;
+
+  const agentsThisRound = independent ? [...S.agents] : shuffle(S.agents);
+  addMsg('sys','','','', independent
+    ? '— Round 1 · Independent responses · all agents in parallel —'
+    : `— Round ${S.round} · ${agentsThisRound.map(a=>a.name).join(', ')} · in parallel —`);
+
+  // Snapshot transcript ONCE — every agent in this round sees the same prior context
+  const prior = independent
+    ? '(Round 1 — independent phase. No other agents have responded yet. Form your own view from scratch.)'
+    : S.log.length === 0
+      ? '(No prior messages.)'
+      : 'Conversation so far:\n\n' + S.log.map(m=>`[${m.name} · Round ${m.round}]: ${m.text}`).join('\n\n');
+
+  // One AbortController for the whole round — Stop cancels all parallel fetches at once
+  const roundAC = new AbortController();
+  S.abortController = roundAC;
+  const signal = roundAC.signal;
+
+  // Insert "thinking…" placeholder for each agent immediately
+  const placeholders = {};
+  for(const agent of agentsThisRound){
+    const ph = document.createElement('div');
+    ph.className = 'msg'; ph.style.borderLeftColor = agent.dot;
+    ph.innerHTML = `<div class="msg-head">
+      <span class="dot" style="background:${agent.dot}"></span>
+      <span class="msg-name">${agent.name}</span>
+      <span class="msg-round">Round ${S.round}</span>
+      <span style="margin-left:8px;font-size:11px;color:var(--text3)">thinking…</span>
+    </div>`;
+    $('thread').appendChild(ph);
+    placeholders[agent.id] = ph;
+  }
+  $('thread').scrollTop = $('thread').scrollHeight;
+  setStatus(`${agentsThisRound.length} agents running in parallel…`);
+
+  // Build sys/usr prompts for one agent
+  function buildPrompts(agent){
+    const sys = [
+      `You are participating in this conversation as the agent named "${agent.name}".`,
+      `In the transcript below, every message labeled [${agent.name}] is YOUR prior response — you wrote it.`,
+      `The other agents are: ${S.agents.filter(a=>a.id!==agent.id).map(a=>a.name).join(', ')}. When they reference "${agent.name}", they are talking about you.`,
+      `Your analytical lens: ${agent.persona}`,
+      independent
+        ? 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.'
+        : `Round ${S.round}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
+      independent ? '' : `RESPONSE STRUCTURE (mandatory — follow this exactly):
+
+1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
+
+2. CHALLENGES (if any): Challenge specific claims from other agents by quoting the exact claim and stating why it is wrong or incomplete. Format: "CHALLENGE: AgentName claimed X — wrong/incomplete because Y."
+   CRITICAL: Only challenge the MOST RECENT position of each agent, not positions from earlier rounds that have already been superseded. If you already made a specific challenge in a prior round and it was not addressed, write only: "UNADDRESSED: My Round N challenge to AgentName on [topic] remains unanswered." Do NOT restate the argument. If you find yourself writing a challenge that is substantively identical to one you made in a prior round, stop — write UNADDRESSED instead.
+
+3. REPETITION CALLOUT (if applicable): If an agent repeated in a later round something they themselves already said in an earlier round without new evidence or reasoning, state: "REPETITION: AgentName restated [point] from Round N without new evidence or reasoning. This adds nothing." Then ignore that point.
+   IMPORTANT: Round 1 was an independent response phase — no agent saw any other agent's response before writing their own. If two agents said similar things in Round 1, that is independent convergence and counts as AGREEMENT, not repetition. Do NOT call out Round 1 responses as repetitive of each other.
+
+4. OPEN QUESTIONS (if any): List only questions that remain genuinely unresolved.
+
+If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." and stop.`,
+      verbNote,
+      nearEnd ? 'Final rounds — converge. State your final position on each open question directly.' : '',
+      certRound ? `CONSENSUS CERTIFICATION (mandatory — last line of your response):
+[CONSENSUS: YES] — zero remaining substantive disagreements on any topic.
+[CONSENSUS: NO: <specific point(s) still unresolved>] — any disagreement on any topic.
+Strict. If in doubt, NO.` : '',
+      !independent ? guidanceBlock : ''
+    ].filter(Boolean).join('\n');
+
+    const usr = independent
+      ? `Problem:\n${S.problem}\n\nProvide your independent analysis and proposed solution as ${agent.name}:`
+      : `Problem:\n${S.problem}\n\n${prior}\n\nYour response as ${agent.name}:`;
+
+    return {sys, usr};
+  }
+
+  // Run one agent — resolves with result object, never rejects
+  async function runAgent(agent){
+    const {sys, usr} = buildPrompts(agent);
+    try {
+      const resp = await dispatchWithRetry(agent, sys, usr, signal);
+      S.errorCounts[agent.id] = 0;
+      let certified = null, displayResp = resp;
+      if(certRound){
+        certified    = parseCertification(resp);
+        displayResp  = stripCertification(resp);
+      }
+      return {agent, resp, displayResp, certified, ok:true};
+    } catch(e) {
+      const aborted = e.name==='AbortError' || signal.aborted || S.stopped;
+      return {agent, error:e.message||String(e), aborted, ok:false};
+    }
+  }
+
+  // Launch all agents simultaneously
+  const settled = await Promise.allSettled(agentsThisRound.map(a => runAgent(a)));
+  setStatus('', false);
+
+  // If stopped/aborted, clean up placeholders and exit
+  if(S.stopped || settled.every(r=>r.value?.aborted)){
+    agentsThisRound.forEach(a => placeholders[a.id]?.remove());
+    handleStop(); return;
+  }
+
+  // Process results — update placeholders in the shuffled display order
+  const toDrop = [];
+  for(const r of settled){
+    const res = r.value;
+    if(!res) continue;
+    const {agent, ok, aborted, resp, displayResp, certified, error} = res;
+    const ph = placeholders[agent.id];
+
+    if(aborted){ ph?.remove(); continue; }
+
+    if(!ok){
+      const permanent = !isTransient(error);
+      if(permanent) S.errorCounts[agent.id] = (S.errorCounts[agent.id]||0) + 1;
+
+      if(permanent && S.errorCounts[agent.id] >= 2){
+        toDrop.push({agent, error});
+        ph?.remove(); continue;
+      }
+      // Skip — replace placeholder with error card
+      const label = permanent
+        ? `${agent.name} · skipped — will drop on next permanent error`
+        : `${agent.name} · skipped — transient error, will retry next round`;
+      const note = permanent
+        ? 'This agent will be permanently removed if it fails again.'
+        : 'Temporary issue. The agent will be retried next round.';
+      if(ph){
+        ph.className = 'msg msg-skip';
+        ph.innerHTML = `<div class="msg-head">
+          <span class="dot" style="background:${agent.dot}"></span>
+          <span class="msg-name">${label}</span>
+          <span class="msg-round">Round ${S.round}</span>
+        </div>
+        <div class="error-label" style="margin:6px 0 3px">Error reason</div>
+        <div class="msg-text" style="font-family:monospace;font-size:12px;background:rgba(0,0,0,0.06);padding:8px;border-radius:4px;margin-bottom:6px">${esc(error)}</div>
+        <div class="msg-text" style="font-size:12px;color:var(--text2)">${note}</div>`;
+      }
+      continue;
+    }
+
+    // Success — record and update placeholder in place
+    if(certRound && certified !== null){
+      S.certifications[agent.id] = certified;
+      if(certified) S.lastCertifyingAgent = agent;
+    }
+    S.log.push({agentId:agent.id, name:agent.name, dot:agent.dot, round:S.round, text:displayResp});
+
+    let certBadge = '';
+    if(certRound && certified !== null){
+      certBadge = certified
+        ? `<span style="display:inline-block;margin-left:8px;font-size:11px;font-weight:500;padding:1px 8px;border-radius:20px;background:#EAF3DE;color:#27500A">✓ consensus certified</span>`
+        : `<span style="display:inline-block;margin-left:8px;font-size:11px;font-weight:500;padding:1px 8px;border-radius:20px;background:#FAEEDA;color:#633806">✗ ${esc(certificationReason(resp))}</span>`;
+    }
+    if(ph){
+      ph.innerHTML = `<div class="msg-head">
+        <span class="dot" style="background:${agent.dot}"></span>
+        <span class="msg-name">${agent.name}</span>
+        <span class="msg-round">Round ${S.round}</span>
+        ${certBadge}
+      </div><div class="msg-text">${esc(displayResp)}</div>`;
+    }
+  }
+  $('thread').scrollTop = $('thread').scrollHeight;
+
+  // Handle drops after all responses are displayed
+  for(const {agent, error} of toDrop){
+    S.agents = S.agents.filter(a=>a.id!==agent.id);
+    const li = document.querySelector(`#legend .legend-item[data-id="${agent.id}"]`);
+    if(li){ li.style.opacity='0.3'; li.style.textDecoration='line-through'; }
+    if(S.agents.length < 2){
+      const dd = document.createElement('div'); dd.className='msg msg-drop';
+      dd.innerHTML=`<div class="msg-head"><span class="dot" style="background:${agent.dot}"></span>
+        <span class="msg-name" style="color:#A32D2D">⚠ ${agent.name} dropped — session ending</span></div>
+        <div class="error-label" style="margin:6px 0 3px">Error reason</div>
+        <div class="msg-text" style="font-family:monospace;font-size:12px;background:var(--bg3);padding:8px;border-radius:4px">${esc(error)}</div>
+        <div class="msg-text" style="margin-top:8px;color:#A32D2D">Fewer than 2 agents remain — synthesizing now.</div>`;
+      $('thread').appendChild(dd); $('thread').scrollTop=$('thread').scrollHeight;
+      await generateSynthesis(); return;
+    }
+    const choice = await confirmDrop(agent, error, S.agents);
+    if(choice==='end'){ await generateSynthesis(); return; }
+    addMsg('sys','','','',`Resuming with ${S.agents.length} agents: ${S.agents.map(a=>a.name).join(', ')}`);
+  }
+
+  // Consensus check (auto mode, round 3+)
+  if(!independent && S.consensusMode==='auto' && S.round>=3){
+    const allCertified = S.agents.every(a=>S.certifications[a.id]===true);
+    if(allCertified){
+      S.consensusReached=true;
+      addMsg('sys','','','',`✓ All ${S.agents.length} agents certified consensus at round ${S.round}.`);
+      await generateSynthesis();
+    }
+  }
+}
+// ─── Drop confirmation ────────────────────────────────────────────────────────
+function confirmDrop(agent, errMsg, remainingAgents) {
+  return new Promise(resolve => {
+    $('drop-title').textContent  = `⚠ ${agent.name} has been dropped`;
+    $('drop-sub').textContent    = `${agent.name} failed with 2 consecutive permanent errors and has been removed from this session.`;
+    $('drop-reason').textContent = errMsg;
+    $('drop-remaining').innerHTML = remainingAgents.map(a =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px">
+        <span class="dot" style="background:${a.dot}"></span>${a.name} (${a.model})
+      </span>`
+    ).join('');
+    $('drop-continue-btn').textContent = `Continue with ${remainingAgents.length} agent${remainingAgents.length!==1?'s':''} ↗`;
+    $('drop-continue-btn').onclick = () => { $('drop-panel').classList.add('hidden'); setState('Running…'); resolve('continue'); };
+    $('drop-end-btn').onclick      = () => { $('drop-panel').classList.add('hidden'); resolve('end'); };
+    $('drop-panel').classList.remove('hidden');
+    setState('⚠ Agent dropped — awaiting decision');
+    setStatus('',false);
+  });
+}
+
+// Returns an agent that explicitly certified NO in the most recent cert round.
+// If multiple, picks randomly. Falls back to settings preference if none found.
+function getDisagreeingAgent() {
+  const noAgents = S.agents.filter(a => S.certifications[a.id] === false);
+  if (noAgents.length) return noAgents[Math.floor(Math.random() * noAgents.length)];
+  return getAgentForRole('analysis'); // before round 3, no certifications yet
+}
+
+async function showPause(){
+  $('pause-title').textContent=`⏸ Checkpoint — round ${S.round} of ${isFinite(S.maxRounds)?S.maxRounds:'∞'}`;
+  $('pause-sub').textContent=`No consensus after ${S.round} rounds. Analyzing disagreements…`;
+  $('disagree-box').textContent='Analyzing…';
+  $('op-guidance').value='';
+  $('resume-btn').disabled=true; $('end-btn').disabled=true;
+  $('pause-panel').classList.remove('hidden');
+  setState('Paused');
+  addMsg('sys','','','',`⏸ Paused at round ${S.round} for operator review.`);
+  setStatus('Generating disagreement analysis…');
+
+  const ag = getDisagreeingAgent();
+  const recent = S.log.slice(-30);
+
+  // The disagreeing agent lists the open gaps from their own perspective
+  const sys = `You are ${ag.name} and you have not yet agreed to consensus.
+List ONLY the unresolved disagreements as bullets from your perspective.
+Format: "• [Topic]: your position vs [other agents' position]"
+One sentence per bullet. No preamble. No conclusions. Maximum 5 bullets.`;
+  const usr = `Problem: ${S.problem}\n\nRecent transcript:\n\n${recent.map(m=>`[${m.name} · Round ${m.round}]: ${m.text}`).join('\n\n')}\n\nList your open disagreements:`;
+
+  try{
+    const result = await dispatch(ag, sys, usr);
+    $('disagree-box').textContent = result;
+    $('pause-title').textContent = `⏸ Checkpoint — round ${S.round} · disagreements per ${ag.name}`;
+  }catch(e){ $('disagree-box').textContent=`Analysis error: ${e.message}`; }
+  $('pause-sub').textContent=`Review, add guidance, then resume or end.`;
+  setStatus('',false);
+  $('resume-btn').disabled=false; $('end-btn').disabled=false;
+}
+
+async function resumeSession(){
+  const g=$('op-guidance').value.trim();
+  if(g){ S.guidances.push({afterRound:S.round,text:g});
+    addMsg('sys','','','',`↩ Guidance injected after round ${S.round}: "${g.length>80?g.slice(0,80)+'…':g}"`); }
+  $('pause-panel').classList.add('hidden');
+  setState('Running…');
+  if(isFinite(S.maxRounds)&&S.round>=S.maxRounds){ await generateSynthesis(); return; }
+  await runLoop();
+}
+
+async function endSession(){ S.done=true; await generateSynthesis(); }
+
+async function generateSynthesis(){
+  S.done=true;
+  $('pause-panel').classList.add('hidden');
+  setState('Synthesizing…'); setStatus('Generating final synthesis…');
+  addMsg('sys','','','','Generating final synthesis…');
+
+  // Last certifying agent writes synthesis when consensus was reached.
+  // Otherwise use the last agent to respond — they have the most current view.
+  const lastResponder = S.log.length > 0
+    ? S.agents.find(a => a.id === S.log[S.log.length - 1].agentId) || S.agents[S.agents.length - 1]
+    : S.agents[S.agents.length - 1];
+  const ag = S.lastCertifyingAgent || lastResponder;
+
+  const sys = S.judgeRuling
+    ? `You are ${ag.name}. You just served as arbitrator and issued a ruling. Now write the final synthesis based on your ruling and the full discussion.
+Write: (1) the final recommended solution incorporating your rulings, (2) the core reasoning, (3) next steps.
+Do NOT include a disagreements section — your ruling resolved them. Be concise — 4 to 6 sentences per section.`
+    : S.consensusReached
+    ? `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration that reached consensus.
+Write a clear, direct final answer covering: (1) the agreed solution, (2) core reasoning, (3) next steps.
+Do NOT include a disagreements section — the agents reached full consensus with none remaining.
+Be concise — 4 to 6 sentences per section.`
+    : `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration.
+Write a clear, direct final answer covering: (1) the recommended solution, (2) core reasoning, (3) remaining disagreements or open questions (only if any exist), (4) next steps.
+Be concise — 4 to 6 sentences per section.`;
+
+  const usr = `Problem: ${S.problem}\n\nFull transcript:\n\n${
+    S.log.map(m=>`[${m.name} · Round ${m.round}]: ${m.text}`).join('\n\n')
+  }${S.judgeRuling ? `\n\nYour arbitrator ruling:\n${S.judgeRuling}` : ''}\n\nWrite the synthesis now.`;
+  let summary;
+  try{
+    const result = await dispatch(ag,sys,usr);
+    summary = result?.text ?? result;
+    trackCost(ag, result?.inputTokens||0, result?.outputTokens||0);
+  }catch(e){ summary=`⚠ Synthesis error: ${e.message}`; }
+  setStatus('',false);
+  const synthLabel = `Final Synthesis · written by ${ag.name}`;
+  addMsg('agent', synthLabel, ag.dot, summary, true);
+  addMsg('sys','','','',
+    `✓ Complete · ${S.round} round${S.round!==1?'s':''} · `+
+    (S.consensusReached?'consensus reached':'ended by operator')+
+    (S.guidances.length?` · ${S.guidances.length} guidance${S.guidances.length!==1?'s':''} injected`:'')+
+    ` · synthesis by ${ag.name}`
+  );
+  setState(S.consensusReached?'✓ Consensus':'Complete');
+  $('stop-btn').disabled=true;
+
+  // Persist session server-side for history browsing
+  saveSession(summary, ag.name);
+}
+
+function stopSession(){
+  if(!S||S.done) return;
+  S.stopped=true;
+  try{ S.abortController?.abort(); }catch(_){}
+  $('stop-btn').disabled=true;
+  // handleStop() will be called by runLoop/runOneRound once the abort lands
+}
+
+function handleStop(){
+  if(S) S.done=true;
+  setStatus('',false);
+  setState('⏹ Stopped');
+  $('stop-btn').disabled=true;
+  addMsg('sys','','','',`⏹ Session stopped at round ${S?.round??0}. Choose an action below.`);
+  $('stopped-actions').classList.remove('hidden');
+  // Save partial session so it appears in history
+  if(S) saveSession(null, null);
+}
+
+async function generateSynthesisManual(){
+  $('stopped-actions').classList.add('hidden');
+  if(S) S.done=false; // allow synthesis to proceed
+  await generateSynthesis();
+}
+
+function exportTranscript(){
+  if(!S) return;
+  const toExport=CFG.exportSys?S.log:S.log.filter(m=>m.agentId!=='sys');
+  const hdr={problem:S.problem,agents:S.agents.map(a=>a.name+' ('+a.model+')'),
+    rounds:S.round,consensus:S.consensusReached,guidances:S.guidances};
+  let content,ext,mime;
+  if(CFG.exportFormat==='json'){
+    content=JSON.stringify({...hdr,messages:S.log},null,2);
+    ext='json'; mime='application/json';
+  } else if(CFG.exportFormat==='markdown'){
+    content=[
+      `# Multi-Agent Collaboration`,
+      `**Problem:** ${S.problem}`,
+      `**Agents:** ${hdr.agents.join(', ')}`,
+      `**Rounds:** ${S.round} · **Consensus:** ${S.consensusReached}`,
+      '',...S.guidances.map(g=>`> **Operator guidance after round ${g.afterRound}:** ${g.text}`),'',
+      ...toExport.map(m=>`### ${m.name} · Round ${m.round}\n\n${m.text}`)
+    ].join('\n\n');
+    ext='md'; mime='text/markdown';
+  } else {
+    content=[
+      'Multi-Agent Collaboration Transcript',
+      'Date: '+new Date().toISOString(),
+      'Problem: '+S.problem,
+      'Agents: '+hdr.agents.join(', '),
+      'Rounds: '+S.round,
+      'Consensus: '+S.consensusReached,
+      '',...S.guidances.map(g=>`[OPERATOR GUIDANCE after round ${g.afterRound}]: ${g.text}`),'',
+      ...toExport.map(m=>`[${m.name} · Round ${m.round}]\n${m.text}`)
+    ].join('\n\n---\n\n');
+    ext='txt'; mime='text/plain';
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=`collaboration-${new Date().toISOString().slice(0,10)}.${ext}`;
+  a.click();
+}
+
+// ─── Prompt log panel ─────────────────────────────────────────────────────────
+let logCurrentAgent = null;
+let logCurrentView  = 'session';
+
+function switchLogView(view) {
+  logCurrentView = view;
+  $('log-session-view').classList.toggle('hidden', view !== 'session');
+  $('log-server-view').classList.toggle('hidden',  view !== 'server');
+  $('log-view-session').style.cssText = view === 'session'
+    ? 'font-size:12px;padding:5px 12px;background:#534AB7;color:#fff;border-color:#534AB7'
+    : 'font-size:12px;padding:5px 12px';
+  $('log-view-server').style.cssText = view === 'server'
+    ? 'font-size:12px;padding:5px 12px;background:#534AB7;color:#fff;border-color:#534AB7'
+    : 'font-size:12px;padding:5px 12px';
+  if (view === 'server') loadServerLogs();
+}
+
+async function loadServerLogs() {
+  const el = $('server-log-list');
+  el.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/logs');
+    const { files } = await r.json();
+    if (!files.length) { el.textContent = 'No log files yet.'; return; }
+    el.innerHTML = files.map(f => {
+      const kb = (f.size / 1024).toFixed(1);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;
+                padding:8px 0;border-bottom:0.5px solid var(--border)">
+        <span style="font-weight:500">${f.date}</span>
+        <div class="flex gap8" style="align-items:center">
+          <span style="color:var(--text3);font-size:12px">${kb} KB</span>
+          <a href="/api/logs/${f.date}" download="${f.date}.log"
+             style="font-size:12px;padding:4px 10px;border-radius:var(--r);
+             border:0.5px solid var(--border2);text-decoration:none;color:var(--text)">
+            ⬇ Download
+          </a>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.textContent = `Error: ${e.message}`;
+  }
+}
+
+function showLogs() {
+  $('log-panel').classList.remove('hidden');
+  switchLogView(logCurrentView);
+  if (logCurrentView === 'session' && S?.promptLog?.length) {
+    buildLogTabs();
+    const first = S.agents?.find(a => S.promptLog.some(e => e.agentId === a.id));
+    if (first) renderLogs(first.id);
+  } else if (!S?.promptLog?.length && logCurrentView === 'session') {
+    switchLogView('server');
+  }
+  $('log-panel').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function hideLogs() { $('log-panel').classList.add('hidden'); }
+
+function buildLogTabs() {
+  const tabs = $('log-agent-tabs');
+  if (!S?.agents) { tabs.innerHTML = ''; return; }
+  const agentsWithLogs = S.agents.filter(a => S.promptLog.some(e => e.agentId === a.id));
+  tabs.innerHTML = agentsWithLogs.map(a => {
+    const count  = S.promptLog.filter(e => e.agentId === a.id).length;
+    const active = logCurrentAgent === a.id;
+    return `<button id="log-tab-${a.id}" onclick="renderLogs('${a.id}')"
+      style="font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:6px;
+      ${active ? 'background:#534AB7;color:#fff;border-color:#534AB7' : ''}">
+      <span style="width:7px;height:7px;border-radius:50%;background:${a.dot};display:inline-block"></span>
+      ${a.name}
+      <span style="font-size:11px;opacity:.7">${count}</span>
+    </button>`;
+  }).join('');
+}
+
+function renderLogs(agentId) {
+  logCurrentAgent = agentId;
+  buildLogTabs();
+  const entries   = S.promptLog.filter(e => e.agentId === agentId);
+  const container = $('log-entries');
+  if (!entries.length) {
+    container.innerHTML = `<div style="color:var(--text3);font-size:13px;padding:12px 0">No entries for this agent yet.</div>`;
+    return;
+  }
+  container.innerHTML = entries.map((e, i) => {
+    const entryId = `logentry-${agentId}-${i}`;
+    return `
+    <div style="margin-bottom:8px;border:0.5px solid var(--border2);border-radius:var(--r);overflow:hidden">
+      <div onclick="toggleLogEntry('${entryId}')"
+        style="display:flex;justify-content:space-between;align-items:center;
+               padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none">
+        <span style="font-size:13px;font-weight:500">Round ${e.round}</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:11px;color:var(--text3)">${e.model}</span>
+          <span style="font-size:11px;color:var(--text3)">${e.timestamp.slice(11,19)} UTC</span>
+          <span style="font-size:11px;color:var(--text2)" id="${entryId}-arrow">▸ expand</span>
+        </div>
+      </div>
+      <div id="${entryId}" style="display:none">
+        <div style="padding:12px 14px;border-top:0.5px solid var(--border)">
+          <div class="error-label" style="color:var(--text2);margin-bottom:6px">System prompt</div>
+          <pre style="font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;
+               background:var(--bg3);padding:10px 12px;border-radius:var(--r);
+               color:var(--text);margin-bottom:12px;max-height:300px;overflow-y:auto">${esc(e.sys)}</pre>
+          <div class="error-label" style="color:var(--text2);margin-bottom:6px">User prompt</div>
+          <pre style="font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;
+               background:var(--bg3);padding:10px 12px;border-radius:var(--r);
+               color:var(--text);margin-bottom:12px;max-height:400px;overflow-y:auto">${esc(e.usr)}</pre>
+          <div class="error-label" style="color:var(--text2);margin-bottom:6px">Response</div>
+          <pre style="font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;
+               background:var(--bg3);padding:10px 12px;border-radius:var(--r);
+               color:var(--text);max-height:400px;overflow-y:auto">${esc(e.resp)}</pre>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleLogEntry(id) {
+  const el = $(id);
+  if (!el) return;
+  const open   = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  const arrow  = $(`${id}-arrow`);
+  if (arrow) arrow.textContent = open ? '▸ expand' : '▾ collapse';
+}
+
+// ─── Session persistence ──────────────────────────────────────────────────────
+async function saveSession(synthesisText, synthesisAgentName) {
+  if (!S) return;
+  try {
+    await fetch('/api/sessions', {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        sessionId       : S.sessionId,
+        timestamp       : new Date().toISOString(),
+        problem         : S.problem,
+        agents          : S.agents.map(a => ({ id:a.id, name:a.name, model:a.model, dot:a.dot })),
+        rounds          : S.round,
+        consensusReached: S.consensusReached,
+        stopped         : S.stopped || false,
+        synthesisAgent  : synthesisAgentName,
+        synthesis       : synthesisText,
+        log             : S.log,
+        guidances       : S.guidances
+      })
+    });
+  } catch(e) { console.warn('Could not save session:', e.message); }
+}
+
+// ─── History panel ────────────────────────────────────────────────────────────
+let historyCurrentSession = null;
+
+function showHistory() {
+  ['setup-panel','settings-panel','convo-panel'].forEach(id => $(id).classList.add('hidden'));
+  $('history-detail').classList.add('hidden');
+  $('history-panel').classList.remove('hidden');
+  loadHistoryList();
+}
+
+function hideHistory() {
+  $('history-panel').classList.add('hidden');
+  $('setup-panel').classList.remove('hidden');
+}
+
+async function loadHistoryList() {
+  const el = $('history-list');
+  el.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/sessions');
+    const { sessions } = await r.json();
+    if (!sessions.length) { el.innerHTML = '<div style="color:var(--text3);padding:12px 0">No sessions saved yet.</div>'; return; }
+    el.innerHTML = sessions.map(s => {
+      const date   = new Date(s.timestamp).toLocaleString();
+      const status = s.consensusReached
+        ? `<span class="pill pill-ok">Consensus</span>`
+        : s.stopped
+          ? `<span class="pill" style="background:var(--bg2);color:var(--text2)">Stopped</span>`
+          : `<span class="pill" style="background:var(--bg2);color:var(--text2)">Complete</span>`;
+      return `
+      <div onclick="openHistorySession('${s.sessionId}')"
+        style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+               padding:12px 0;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .15s"
+        onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.problem)}</div>
+          <div style="font-size:11px;color:var(--text3)">${date} · ${s.agents?.join(', ')} · ${s.rounds} round${s.rounds!==1?'s':''}</div>
+        </div>
+        <div style="flex-shrink:0;margin-top:2px">${status}</div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.textContent = `Error: ${e.message}`; }
+}
+
+async function openHistorySession(sessionId) {
+  const thread = $('hd-thread');
+  thread.innerHTML = '<div style="color:var(--text3);padding:12px 0">Loading…</div>';
+  $('history-detail').classList.remove('hidden');
+  $('history-list').closest('.card').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/sessions/${sessionId}`);
+    const s = await r.json();
+    if (s.error) throw new Error(s.error);
+    historyCurrentSession = s;
+
+    $('hd-title').textContent = new Date(s.timestamp).toLocaleString();
+    const status = s.consensusReached ? '✓ Consensus' : s.stopped ? '⏹ Stopped' : 'Complete';
+    $('hd-meta').textContent = `${s.agents?.map(a=>a.name).join(', ')} · ${s.rounds} rounds · ${status}`;
+    $('hd-problem').textContent = s.problem;
+
+    thread.innerHTML = (s.log || []).map(m => {
+      const dot   = s.agents?.find(a => a.id === m.agentId)?.dot || '#888';
+      const synth = m.name === 'Final Synthesis' || (m.name||'').includes('Final Synthesis');
+      const div   = document.createElement('div');
+      div.className = 'msg' + (synth ? ' msg-synth' : '');
+      div.style.cssText = `border-left-color:${synth?'#639922':dot};margin-bottom:8px`;
+      div.innerHTML = `<div class="msg-head">
+        <span class="dot" style="background:${synth?'#639922':dot}"></span>
+        <span class="msg-name">${esc(m.name||'')}${synth?' · final synthesis':''}</span>
+        <span class="msg-round">Round ${m.round}</span>
+      </div><div class="msg-text">${esc(m.text||'')}</div>`;
+      return div.outerHTML;
+    }).join('') || '<div style="color:var(--text3);padding:12px 0">No messages in this session.</div>';
+
+  } catch(e) {
+    thread.innerHTML = `<div style="color:var(--text2);padding:12px 0">Error loading session: ${e.message}</div>`;
+  }
+}
+
+function hideHistoryDetail() {
+  $('history-detail').classList.add('hidden');
+  $('history-list').closest('.card').style.display = '';
+  historyCurrentSession = null;
+}
+
+function exportHistorySession() {
+  if (!historyCurrentSession) return;
+  const s = historyCurrentSession;
+  const lines = [
+    'Multi-Agent Collaboration Transcript',
+    'Date: ' + s.timestamp,
+    'Problem: ' + s.problem,
+    'Agents: ' + s.agents?.map(a => `${a.name} (${a.model})`).join(', '),
+    'Rounds: ' + s.rounds,
+    'Consensus: ' + s.consensusReached,
+    '',
+    ...(s.guidances||[]).map(g => `[OPERATOR GUIDANCE after round ${g.afterRound}]: ${g.text}`),
+    '',
+    ...(s.log||[]).map(m => `[${m.name} · Round ${m.round}]\n${m.text}`)
+  ].join('\n\n---\n\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines], { type:'text/plain' }));
+  a.download = `session-${s.sessionId}.txt`;
+  a.click();
+}
+
+async function deleteHistorySession() {
+  if (!historyCurrentSession) return;
+  if (!confirm('Delete this session permanently?')) return;
+  try {
+    await fetch(`/api/sessions/${historyCurrentSession.sessionId}`, { method:'DELETE' });
+    hideHistoryDetail();
+    loadHistoryList();
+  } catch(e) { alert('Delete failed: ' + e.message); }
+}
+
+function confirmReset(){
+  if(S&&!S.done&&S.round>0){ if(!confirm('Session in progress. Reset and lose all data?')) return; }
+  resetSession();
+}
+function resetSession(){
+  S=null;
+  $('thread').innerHTML='';
+  const cd=$('cost-display'); if(cd) cd.textContent='';
+  $('convo-panel').classList.add('hidden');
+  $('setup-panel').classList.remove('hidden');
+  $('pause-panel').classList.add('hidden');
+  $('drop-panel').classList.add('hidden');
+  $('stopped-actions').classList.add('hidden');
+  $('history-panel').classList.add('hidden');
+  $('log-panel').classList.add('hidden');
+  $('settings-panel').classList.add('hidden');
+  $('settings-btn').textContent='⚙ Settings';
+  $('settings-btn').onclick=showSettings;
+  setStatus('',false);
+}
+
+init();
+</script>
+</body>
+</html>
