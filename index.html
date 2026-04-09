@@ -1629,7 +1629,9 @@ One sentence per bullet. No preamble. No conclusions. Maximum 5 bullets.`;
 
   try{
     const result = await dispatch(ag, sys, usr);
-    $('disagree-box').textContent = result;
+    const text = result?.text ?? result;
+    trackCost(ag, result?.inputTokens||0, result?.outputTokens||0);
+    $('disagree-box').textContent = text;
     $('pause-title').textContent = `⏸ Checkpoint — round ${S.round} · disagreements per ${ag.name}`;
   }catch(e){ $('disagree-box').textContent=`Analysis error: ${e.message}`; }
   $('pause-sub').textContent=`Review, add guidance, then resume or end.`;

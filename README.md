@@ -319,6 +319,18 @@ Browse and download from the **📋 Logs → Server logs** panel in the UI.
 
 ---
 
+## Costs & Responsibilities
+
+- API usage costs are incurred directly with each provider (Anthropic, OpenAI, xAI, Google) based on tokens consumed. The live cost display in the UI tracks session spend in real time. Economy-tier models (the default) are significantly cheaper — a typical 10-round session with 4 agents costs less than $0.10 at economy tier.
+- Self-hosting this application on your own infrastructure incurs whatever compute and bandwidth costs your environment carries. There is no licensing fee for the software itself.
+- You are responsible for securing your API keys, rotating them if compromised, and ensuring they are never committed to version control or exposed publicly.
+- It is important to fully understand your organization's policies regarding external API usage, data residency, and what information may be sent to third-party AI providers. All problem statements and agent responses are transmitted to the respective provider APIs.
+- You are responsible for monitoring provider billing, setting appropriate spend limits on each API key, and ensuring usage remains within budget.
+- Regular backups of the `sessions/` and `logs/` directories are recommended for data retention and disaster recovery.
+- Review each provider's terms of service regarding data usage, retention, and permissible use cases before deploying in an organizational context.
+
+---
+
 ## Contributing
 
 This is a POC. Issues and PRs welcome, particularly around:
@@ -326,9 +338,3 @@ This is a POC. Issues and PRs welcome, particularly around:
 - Additional provider integrations
 - Streaming response support
 - Test coverage
-
----
-
-## License
-
-MIT
