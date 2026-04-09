@@ -1382,10 +1382,9 @@ async function runOneRound(){
 
   const independent = S.round === 1;
   const nearEnd     = isFinite(S.maxRounds) && S.round >= S.maxRounds * 0.8;
-  const certRound   = !independent && S.consensusMode === 'auto' && S.round >= 3;
-  const guidanceBlock = S.guidances.length > 0
-    ? '\n\nOPERATOR GUIDANCE:\n' + S.guidances.map(g=>`  [After round ${g.afterRound}]: "${g.text}"`).join('\n')
-    : '';
+  const certRound = !independent && S.consensusMode === 'auto' &&
+    (S.round >= 3 || S.guidances.length > 0);
+  const guidanceBlock = ''; // operator override now handled directly in buildPrompts
   const verbNote = VERBOSITY_PROMPTS[CFG.verbosity] || VERBOSITY_PROMPTS.standard;
 
   const agentsThisRound = independent ? [...S.agents] : shuffle(S.agents);
@@ -1424,7 +1423,17 @@ async function runOneRound(){
 
   // Build sys/usr prompts for one agent
   function buildPrompts(agent){
+    const hasGuidance = S.guidances.length > 0;
+    const latestGuidanceText = hasGuidance ? S.guidances[S.guidances.length-1].text : '';
+
+    // When operator has provided guidance, debate rules are suspended —
+    // the guidance is placed at the very top as an override directive
+    const operatorOverride = hasGuidance && !independent
+      ? `OPERATOR RULING — THIS OVERRIDES ALL PRIOR DEBATE:\nThe operator has reviewed the discussion and provided this definitive answer: "${latestGuidanceText}"\nYou MUST accept this ruling. Do NOT challenge it. Do NOT debate it. Do NOT continue raising prior disagreements.\nYour ONLY permitted responses are:\n1. Acknowledge the ruling in one sentence.\n2. State [CONSENSUS: YES] on the final line.\nAny response that continues the debate after an operator ruling will be disregarded.`
+      : '';
+
     const sys = [
+      operatorOverride, // TOP — seen first, before identity or debate rules
       `You are participating in this conversation as the agent named "${agent.name}".`,
       `In the transcript below, every message labeled [${agent.name}] is YOUR prior response — you wrote it.`,
       `The other agents are: ${S.agents.filter(a=>a.id!==agent.id).map(a=>a.name).join(', ')}. When they reference "${agent.name}", they are talking about you.`,
@@ -1432,7 +1441,8 @@ async function runOneRound(){
       independent
         ? 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.'
         : `Round ${S.round}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
-      independent ? '' : `RESPONSE STRUCTURE (mandatory — follow this exactly):
+      // Suspend debate structure when operator has ruled
+      (!independent && !hasGuidance) ? `RESPONSE STRUCTURE (mandatory — follow this exactly):
 
 1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
 
@@ -1444,14 +1454,13 @@ async function runOneRound(){
 
 4. OPEN QUESTIONS (if any): List only questions that remain genuinely unresolved.
 
-If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." and stop.`,
+If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." and stop.` : '',
       verbNote,
       nearEnd ? 'Final rounds — converge. State your final position on each open question directly.' : '',
       certRound ? `CONSENSUS CERTIFICATION (mandatory — last line of your response):
 [CONSENSUS: YES] — zero remaining substantive disagreements on any topic.
 [CONSENSUS: NO: <specific point(s) still unresolved>] — any disagreement on any topic.
 Strict. If in doubt, NO.` : '',
-      !independent ? guidanceBlock : ''
     ].filter(Boolean).join('\n');
 
     const usr = independent
