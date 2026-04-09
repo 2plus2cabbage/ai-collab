@@ -1,3 +1,8 @@
+<img align="right" width="150" src="https://github.com/2plus2cabbage/2plus2cabbage/blob/main/images/2plus2cabbage.png">
+
+<img src="https://github.com/2plus2cabbage/2plus2cabbage/blob/main/images/ai-collab.png" alt="ai-collab" width="300" align="left">
+<br clear="left">
+
 # Multi-Agent AI Collaboration Platform
 
 > **⚠ Proof of Concept — Not Production Ready**
