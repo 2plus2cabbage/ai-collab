@@ -102,8 +102,8 @@ Node.js / Express (server.js, port 3001)
 ### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/multiagent-collab.git
-cd multiagent-collab
+git clone https://github.com/2plus2cabbage/ai-collab.git
+cd ai-collab
 npm install
 ```
 
