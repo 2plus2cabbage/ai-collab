@@ -1475,8 +1475,15 @@ Strict. If in doubt, NO.` : '',
     }
   }
 
-  // Launch all agents simultaneously
-  const settled = await Promise.allSettled(agentsThisRound.map(a => runAgent(a)));
+  // Launch agents with a 500ms stagger to avoid burst rate limit hits.
+  // All are still in-flight simultaneously — the last agent starts 1.5s after the first
+  // but they all overlap. This spreads the token burst without losing parallelism.
+  const STAGGER_MS = 500;
+  const settled = await Promise.allSettled(agentsThisRound.map((a, i) =>
+    new Promise(resolve =>
+      setTimeout(() => runAgent(a).then(resolve), i * STAGGER_MS)
+    )
+  ));
   setStatus('', false);
 
   // If stopped/aborted, clean up placeholders and exit
