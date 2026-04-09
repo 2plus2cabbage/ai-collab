@@ -9,7 +9,7 @@ A single-page web application that runs multiple AI agents from different provid
 
 ## What It Does
 
-You pose a problem. Four AI agents — Anthropic Claude, OpenAI GPT, xAI Grok, and Google Gemini — each respond independently in Round 1 without seeing each other's answers. From Round 2 onward, they debate in parallel, each seeing the full prior transcript. They are required to contribute only new positions, challenge specific claims, and call out repetition. If they cannot agree by a configurable round threshold, a fifth agent held in reserve enters as a neutral arbitrator, issues definitive rulings on each unresolved disagreement, and writes the final synthesis.
+You pose a problem. Up to four AI agents — Anthropic Claude, OpenAI GPT, xAI Grok, and Google Gemini — participate in the session. When the arbitrator is enabled, one of the four is randomly selected at session start and held in reserve, leaving three to debate. Each of the active agents responds independently in Round 1 without seeing each other's answers. From Round 2 onward, they debate in parallel, each seeing the full prior transcript. They are required to contribute only new positions, challenge specific claims, and call out repetition. If they cannot agree by a configurable round threshold, the reserved agent enters as a neutral arbitrator — having observed the full discussion without participating — issues definitive rulings on each unresolved disagreement, and writes the final synthesis.
 
 The system is designed to surface genuine disagreement between AI models, avoid anchoring bias, prevent one provider from dominating the conversation, and produce a synthesis that reflects where the models actually converged rather than where one model led the others.
 
