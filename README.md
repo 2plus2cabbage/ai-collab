@@ -319,7 +319,25 @@ Browse and download from the **📋 Logs → Server logs** panel in the UI.
 
 ---
 
-## Costs & Responsibilities
+## A Note on AI Reasoning Quality
+
+This platform coordinates multiple AI models but does not make them smarter. AI chat assistants are fundamentally pattern-matching systems trained to produce plausible-sounding text. They will:
+
+- State incorrect facts with complete confidence
+- Make logically inconsistent arguments across rounds
+- Agree with each other for the wrong reasons
+- Reach consensus on a wrong answer
+- Produce sophisticated-sounding analysis that is subtly or catastrophically flawed
+
+The structured debate format, repetition enforcement, and consensus certification all reduce some failure modes — but they do not eliminate them. The arbitrator is an AI too.
+
+**Treat all output as a starting point for human judgment, not a substitute for it.** The value of this system is in surfacing multiple perspectives and forcing explicit disagreement — not in the correctness of any individual agent's reasoning. A human operator should always review the synthesis critically before acting on it.
+
+The more consequential the decision, the more skepticism you should apply.
+
+---
+
+
 
 - API usage costs are incurred directly with each provider (Anthropic, OpenAI, xAI, Google) based on tokens consumed. The live cost display in the UI tracks session spend in real time. Economy-tier models (the default) are significantly cheaper — a typical 10-round session with 4 agents costs less than $0.10 at economy tier.
 - Self-hosting this application on your own infrastructure incurs whatever compute and bandwidth costs your environment carries. There is no licensing fee for the software itself.
