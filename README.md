@@ -269,6 +269,16 @@ If consensus not reached by Round N (default: 10):
 
 Certification tags are stripped before display and shown as green/amber badges on each message.
 
+### Without an arbitrator
+
+When the arbitrator is disabled, the session ends in one of three ways:
+
+1. **Consensus** — all active agents certify `[CONSENSUS: YES]` in the same round. The last agent to certify writes the final synthesis.
+2. **Checkpoint pause** — every N rounds (default 10) the session pauses and shows open disagreements written from the perspective of the most recent dissenting agent. The operator can inject guidance to steer the agents and resume, or choose to end and synthesize immediately with whatever convergence exists.
+3. **Manual stop** — the operator hits ⏹ at any point, cancelling all in-flight calls. They can then generate a synthesis from the existing transcript or export and walk away.
+
+Without an arbitrator there is no automatic hard cap — the session can run indefinitely if consensus is never reached and the operator keeps resuming at checkpoints. The **Default max rounds** setting (default 50, configurable in Settings) acts as a background ceiling to prevent runaway sessions.
+
 ---
 
 ## Logs
