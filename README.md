@@ -52,7 +52,18 @@ Node.js / Express (server.js, port 3001)
 - **Randomised agent order** — displayed in a different shuffled order each round so no provider consistently anchors the discussion
 - **Identity anchoring** — each agent is explicitly told which transcript entries are their own prior responses, preventing cross-agent identity confusion
 
-### Consensus System
+### Focus Modes
+
+A **Focus mode** selector on the main page changes how agents approach the problem:
+
+| Mode | Best for | Agent lenses | Synthesis output |
+|---|---|---|---|
+| **General** | Strategy, analysis, decisions, research, factual questions | Logical structure · Practical implementation · Stress-testing · Breadth & synthesis | Recommended solution, reasoning, next steps |
+| **Coding** | Implementation, code review, debugging, architecture | Correctness & clarity · Production reliability · Performance & failure modes · Security & tradeoffs | Complete solution with code, correctness rationale, edge cases |
+
+Switching modes changes the textarea placeholder, the per-agent system prompts, the debate framing, and the synthesis instruction. Additional modes (Medical, Legal, Financial, Technical Architecture) can be added by extending the `FOCUS_CONFIGS` table in `index.html`.
+
+
 - **Self-certification** — from Round 3, each agent appends `[CONSENSUS: YES]` or `[CONSENSUS: NO: reason]` to every response
 - **All-or-nothing** — consensus only fires when every active agent certifies YES in the same round
 - **Reserve arbitrator** — one agent is held in reserve and excluded from all rounds; if consensus is not reached by a configurable round (default: Round 10), it enters, reviews the full transcript, rules definitively on each unresolved point, and writes the synthesis
@@ -175,12 +186,13 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Usage
 
 1. **Configure agents** — check the providers you want to include; select models and review the analytical lens for each
-2. **Set arbitrator round** — default is Round 10; set to Disabled if you want to run manually
-3. **Enter a problem** — specific, debatable questions with concrete constraints work best
-4. **Start** — Round 1 runs in parallel independently; from Round 2 agents debate the full transcript
-5. **Monitor** — watch consensus certifications appear on each message; cost accumulates in the header bar
-6. **Intervene at checkpoints** — every 10 rounds (configurable) the session pauses and shows open disagreements from the dissenting agent's perspective; add operator guidance or end and synthesize
-7. **Review history** — click 📂 History to browse all past sessions with full transcript replay
+2. **Select focus mode** — General for analysis and strategy; Coding for implementation and review
+3. **Set arbitrator round** — default is Round 10; set to Disabled if you want to run manually
+4. **Enter a problem** — specific, debatable questions with concrete constraints work best
+5. **Start** — Round 1 runs in parallel independently; from Round 2 agents debate the full transcript
+6. **Monitor** — watch consensus certifications appear on each message; cost accumulates in the header bar
+7. **Intervene at checkpoints** — every 10 rounds (configurable) the session pauses and shows open disagreements from the dissenting agent's perspective; add operator guidance, use it as a final answer, or designate an agent to close the discussion
+8. **Review history** — click 📂 History to browse all past sessions with full transcript replay
 
 ### Prompt Tips
 
@@ -336,6 +348,8 @@ The structured debate format, repetition enforcement, and consensus certificatio
 The more consequential the decision, the more skepticism you should apply.
 
 ---
+
+
 
 ## Costs & Responsibilities
 

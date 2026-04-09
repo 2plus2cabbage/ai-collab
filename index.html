@@ -258,6 +258,15 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
       <textarea id="problem" rows="4"
         placeholder="Describe the problem clearly. Include data, constraints, and what a good solution looks like."></textarea>
     </div>
+    <div class="flex gap10 wrap-row" style="margin-bottom:14px">
+      <div class="field" style="margin:0;flex:0 0 auto">
+        <label>Focus mode</label>
+        <select id="focus-mode" style="width:180px" onchange="updateFocusPlaceholder()">
+          <option value="general">General — analysis &amp; strategy</option>
+          <option value="coding">Coding — implementation &amp; review</option>
+        </select>
+      </div>
+    </div>
     <div class="field">
       <label>Agent configuration</label>
       <div class="grid4" id="agent-cards"></div>
@@ -938,6 +947,13 @@ async function fetchAllModels() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 let providerStatus={}, enabled={}, S=null;
 
+function updateFocusPlaceholder(){
+  const mode = $('focus-mode')?.value || 'general';
+  const cfg = FOCUS_CONFIGS[mode] || FOCUS_CONFIGS.general;
+  const ta = $('problem');
+  if(ta) ta.placeholder = cfg.problemPlaceholder;
+}
+
 async function init() {
   loadSettings();
   applyColorMode();
@@ -965,6 +981,7 @@ async function init() {
     });
   });
   await fetchAllModels();
+  updateFocusPlaceholder();
 }
 
 function buildCards() {
@@ -1070,7 +1087,36 @@ async function dispatch(agent,sys,usr,signal) {
   }
 }
 
-// ─── Model pricing ── $/1M tokens ────────────────────────────────────────────
+// ─── Focus mode configurations ────────────────────────────────────────────────
+const FOCUS_CONFIGS = {
+  general: {
+    label: 'General',
+    problemPlaceholder: 'Describe the problem clearly. Include data, constraints, and what a good solution looks like.',
+    round1Instruction: 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.',
+    debateInstruction: `Round {N}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
+    lensLabel: 'Analytical lens',
+    brevityRule: `BREVITY RULE (check this first):
+If the problem has a clear, definitive, factual answer that all agents have already stated correctly in Round 1, do NOT elaborate further. Write only: "AGREEMENT: The answer is [answer]. Nothing to add." and append [CONSENSUS: YES]. Do not introduce historical context, second-order effects, or analysis unless the problem explicitly asks for it.`,
+    synthesisInstruction: 'Write a clear, direct final answer covering: (1) the agreed solution, (2) core reasoning, (3) next steps.'
+  },
+  coding: {
+    label: 'Coding',
+    problemPlaceholder: 'Describe the coding task. Include language, framework, constraints, and what correct output or behaviour looks like. Paste existing code if relevant.',
+    round1Instruction: 'Round 1 — independent response. Provide your own solution or analysis of the code. Show your implementation or diagnosis directly. No preamble.',
+    debateInstruction: `Round {N}. Review other agents' code. Be direct and technical. No pleasantries. Focus on correctness, efficiency, edge cases, and security.`,
+    lensLabel: 'Coding lens',
+    brevityRule: `BREVITY RULE (check this first):
+If all agents have converged on the same correct implementation with no substantive differences in approach, correctness, or edge-case handling, write only: "AGREEMENT: [AgentName]'s solution is correct and complete. Nothing to add." and append [CONSENSUS: YES]. Do not pad with alternative approaches that are not meaningfully better.`,
+    synthesisInstruction: 'Write the final recommended implementation. Include: (1) the complete solution with code, (2) why this approach is correct, (3) any edge cases or caveats the operator should know.'
+  }
+};
+
+const CODING_PERSONAS = {
+  anthropic: 'Coding lens: correctness, type safety, and code clarity. Prioritizes readable, well-structured code that handles edge cases explicitly.',
+  openai:    'Coding lens: practical implementation, standard library usage, and real-world constraints. Prioritizes code that works reliably in production.',
+  grok:      'Coding lens: performance, unconventional approaches, and hidden failure modes. Stress-tests assumptions and looks for what breaks under load.',
+  gemini:    'Coding lens: breadth of approaches, security implications, and cross-platform concerns. Prioritizes completeness and awareness of tradeoffs.'
+};
 const MODEL_PRICING = {
   // Anthropic
   'claude-haiku-4-5':          { in:0.80,  out:4.00  },
@@ -1244,6 +1290,7 @@ async function startSession(){
   if(agents.length<2){ alert('Please enable at least 2 configured agents.'); return; }
 
   const judgeRound = parseInt($('judge-round').value) || 0;
+  const focusMode = $('focus-mode').value || 'general';
   let judgeAgent = null;
   if(judgeRound > 0 && agents.length >= 3){
     // Pick a random agent to hold in reserve as arbitrator
@@ -1259,7 +1306,7 @@ async function startSession(){
     pauseEvery:parseInt($('pause-every').value),
     consensusMode:$('consensus-mode').value,
     roundDelay:parseInt($('round-delay').value),
-    judgeAgent, judgeRound,
+    judgeAgent, judgeRound, focusMode,
     round:0, log:[], guidances:[], promptLog:[], consensusReached:false,
     stopped:false, errorCounts:{}, certifications:{}, lastCertifyingAgent:null,
     agentCosts:{}, totalCost:0, done:false,
@@ -1426,28 +1473,27 @@ async function runOneRound(){
   // Build sys/usr prompts for one agent
   function buildPrompts(agent){
     const hasGuidance = S.guidances.length > 0;
-    const latestGuidanceText = hasGuidance ? S.guidances[S.guidances.length-1].text : '';
+    const focus = FOCUS_CONFIGS[S.focusMode] || FOCUS_CONFIGS.general;
+    const persona = S.focusMode === 'coding'
+      ? (CODING_PERSONAS[agent.id] || agent.persona)
+      : agent.persona;
 
-    // When operator has provided guidance, debate rules are suspended —
-    // the guidance is placed at the very top as an override directive
     const operatorOverride = hasGuidance && !independent
-      ? `OPERATOR RULING — THIS OVERRIDES ALL PRIOR DEBATE:\nThe operator has reviewed the discussion and provided this definitive answer: "${latestGuidanceText}"\nYou MUST accept this ruling. Do NOT challenge it. Do NOT debate it. Do NOT continue raising prior disagreements.\nYour ONLY permitted responses are:\n1. Acknowledge the ruling in one sentence.\n2. State [CONSENSUS: YES] on the final line.\nAny response that continues the debate after an operator ruling will be disregarded.`
+      ? `OPERATOR RULING — THIS OVERRIDES ALL PRIOR DEBATE:\nThe operator has reviewed the discussion and provided this definitive answer: "${S.guidances[S.guidances.length-1].text}"\nYou MUST accept this ruling. Do NOT challenge it. Do NOT debate it. Do NOT continue raising prior disagreements.\nYour ONLY permitted responses are:\n1. Acknowledge the ruling in one sentence.\n2. State [CONSENSUS: YES] on the final line.\nAny response that continues the debate after an operator ruling will be disregarded.`
       : '';
 
     const sys = [
-      operatorOverride, // TOP — seen first, before identity or debate rules
+      operatorOverride,
       `You are participating in this conversation as the agent named "${agent.name}".`,
       `In the transcript below, every message labeled [${agent.name}] is YOUR prior response — you wrote it.`,
       `The other agents are: ${S.agents.filter(a=>a.id!==agent.id).map(a=>a.name).join(', ')}. When they reference "${agent.name}", they are talking about you.`,
-      `Your analytical lens: ${agent.persona}`,
+      `Your ${focus.lensLabel}: ${persona}`,
       independent
-        ? 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.'
-        : `Round ${S.round}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
-      // Suspend debate structure when operator has ruled
-      (!independent && !hasGuidance) ? `BREVITY RULE (check this first):
-If the problem has a clear, definitive, factual answer that all agents have already stated correctly in Round 1, do NOT elaborate further. Write only: "AGREEMENT: The answer is [answer]. Nothing to add." and append [CONSENSUS: YES]. Do not introduce historical context, second-order effects, or analysis unless the problem explicitly asks for it.
+        ? focus.round1Instruction
+        : focus.debateInstruction.replace('{N}', S.round),
+      (!independent && !hasGuidance) ? `${focus.brevityRule}
 
-RESPONSE STRUCTURE (only if the above does not apply — follow this exactly):
+RESPONSE STRUCTURE (only if the brevity rule does not apply — follow this exactly):
 
 1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
 
@@ -1732,17 +1778,19 @@ async function generateSynthesis(){
     : S.agents[S.agents.length - 1];
   const ag = S.lastCertifyingAgent || lastResponder;
 
+  const focus = FOCUS_CONFIGS[S.focusMode] || FOCUS_CONFIGS.general;
   const sys = S.judgeRuling
     ? `You are ${ag.name}. You just served as arbitrator and issued a ruling. Now write the final synthesis based on your ruling and the full discussion.
 Write: (1) the final recommended solution incorporating your rulings, (2) the core reasoning, (3) next steps.
 Do NOT include a disagreements section — your ruling resolved them. Be concise — 4 to 6 sentences per section.`
     : S.consensusReached
     ? `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration that reached consensus.
-Write a clear, direct final answer covering: (1) the agreed solution, (2) core reasoning, (3) next steps.
+${focus.synthesisInstruction}
 Do NOT include a disagreements section — the agents reached full consensus with none remaining.
 Be concise — 4 to 6 sentences per section.`
     : `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration.
-Write a clear, direct final answer covering: (1) the recommended solution, (2) core reasoning, (3) remaining disagreements or open questions (only if any exist), (4) next steps.
+${focus.synthesisInstruction}
+Also note any remaining disagreements or open questions if any exist.
 Be concise — 4 to 6 sentences per section.`;
 
   const usr = `Problem: ${S.problem}\n\nFull transcript:\n\n${
