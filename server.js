@@ -59,6 +59,12 @@ function pruneOldLogs() {
 }
 pruneOldLogs();
 
+// Strip <think>...</think> reasoning blocks that sonar-reasoning models emit
+function stripThinkBlocks(text) {
+  if (!text) return text;
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+}
+
 // Extract the structured fields we want to log from each provider's request/response format
 function extractFields(provider, reqBody, resData) {
   try {
@@ -80,8 +86,16 @@ function extractFields(provider, reqBody, resData) {
         inputTokens:  resData.usage?.prompt_tokens,
         outputTokens: resData.usage?.completion_tokens
       };
+      case 'perplexity': return {
+        model:        reqBody.model,
+        systemPrompt: reqBody.messages?.find(m => m.role === 'system')?.content || '',
+        userPrompt:   reqBody.messages?.filter(m => m.role === 'user').slice(-1)[0]?.content || '',
+        response:     stripThinkBlocks(resData.choices?.[0]?.message?.content || ''),
+        inputTokens:  resData.usage?.prompt_tokens,
+        outputTokens: resData.usage?.completion_tokens
+      };
       case 'gemini': return {
-        model:        reqBody._model || '',   // injected below before body is mutated
+        model:        reqBody._model || '',
         systemPrompt: reqBody.system_instruction?.parts?.[0]?.text || '',
         userPrompt:   reqBody.contents?.[0]?.parts?.[0]?.text || '',
         response:     resData.candidates?.[0]?.content?.parts?.[0]?.text || '',
@@ -121,6 +135,11 @@ async function loggingProxy(provider, url, extraHeaders, reqBody, req, res) {
       error       : data.error ? data.error.message : null,
       ...fields
     });
+
+    // Strip <think> blocks from Perplexity reasoning models before returning to browser
+    if (provider === 'perplexity' && data.choices?.[0]?.message?.content) {
+      data.choices[0].message.content = stripThinkBlocks(data.choices[0].message.content);
+    }
 
     res.status(r.status).json(data);
   } catch (e) {
@@ -218,10 +237,11 @@ app.delete('/api/sessions/:id', (req, res) => {
 // ─── Status ───────────────────────────────────────────────────────────────────
 app.get('/api/status', (_req, res) => {
   res.json({
-    anthropic : !!process.env.ANTHROPIC_API_KEY,
-    openai    : !!process.env.OPENAI_API_KEY,
-    grok      : !!process.env.GROK_API_KEY,
-    gemini    : !!process.env.GEMINI_API_KEY
+    anthropic  : !!process.env.ANTHROPIC_API_KEY,
+    openai     : !!process.env.OPENAI_API_KEY,
+    grok       : !!process.env.GROK_API_KEY,
+    gemini     : !!process.env.GEMINI_API_KEY,
+    perplexity : !!process.env.PERPLEXITY_API_KEY
   });
 });
 
@@ -300,6 +320,27 @@ app.post('/api/grok', (req, res) => {
     req.body, req, res);
 });
 
+// ─── Perplexity (OpenAI-compatible) ───────────────────────────────────────────
+app.get('/api/perplexity/models', (req, res) => {
+  if (!process.env.PERPLEXITY_API_KEY)
+    return res.status(503).json({ error: { message: 'PERPLEXITY_API_KEY not set' } });
+  // Perplexity doesn't have a /models endpoint — return a static known list
+  res.json({ data: [
+    { id:'sonar' },
+    { id:'sonar-pro' },
+    { id:'sonar-reasoning' },
+    { id:'sonar-reasoning-pro' }
+  ]});
+});
+
+app.post('/api/perplexity', (req, res) => {
+  if (!process.env.PERPLEXITY_API_KEY)
+    return res.status(503).json({ error: { message: 'PERPLEXITY_API_KEY not set in .env' } });
+  loggingProxy('perplexity', 'https://api.perplexity.ai/chat/completions',
+    { 'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}` },
+    req.body, req, res);
+});
+
 app.post('/api/gemini', (req, res) => {
   if (!process.env.GEMINI_API_KEY)
     return res.status(503).json({ error: { message: 'GEMINI_API_KEY not set in .env' } });
@@ -318,7 +359,7 @@ app.listen(PORT, () => {
   console.log(`Log directory     : ${LOG_DIR}  (${LOG_RETENTION_DAYS}-day retention)`);
   console.log(`Sessions directory: ${SESSIONS_DIR}`);
   console.log('Providers configured:');
-  ['anthropic','openai','grok','gemini'].forEach(p => {
+  ['anthropic','openai','grok','gemini','perplexity'].forEach(p => {
     const key = p.toUpperCase() + '_API_KEY';
     console.log(`  ${p.padEnd(10)} ${process.env[key] ? '✓ ready' : '✗ missing (add to .env)'}`);
   });

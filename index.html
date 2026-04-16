@@ -297,12 +297,18 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
       </div>
       <div class="field" style="margin:0;flex:0 0 auto">
         <label>Arbitrator activates</label>
-        <select id="judge-round" style="width:130px">
+        <select id="judge-round" style="width:130px" onchange="updateJudgeSelVisibility()">
           <option value="0">Disabled</option>
           <option value="5">Round 5</option>
           <option value="10" selected>Round 10</option>
           <option value="15">Round 15</option>
           <option value="20">Round 20</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;flex:0 0 auto" id="judge-agent-field">
+        <label>Arbitrator</label>
+        <select id="judge-agent" style="width:140px">
+          <option value="auto">Auto (random)</option>
         </select>
       </div>
       <button class="primary" onclick="startSession()" style="align-self:flex-end;padding:8px 22px">
@@ -645,7 +651,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
 // ─── Provider definitions ─────────────────────────────────────────────────────
 const PROVIDERS = [
   { id:'anthropic', name:'Anthropic', dot:'#7F77DD',
-    models:['claude-haiku-4-5','claude-sonnet-4-20250514'],
+    models:['claude-haiku-4-5','claude-sonnet-4-5'],
     persona:'Analytical lens: logical structure, evidence quality, and precise reasoning. Prioritizes accuracy over novelty.' },
   { id:'openai', name:'OpenAI', dot:'#1D9E75',
     models:['gpt-4o-mini','gpt-4o'],
@@ -655,14 +661,17 @@ const PROVIDERS = [
     persona:'Analytical lens: unstated assumptions, edge cases, and contrarian positions. Prioritizes stress-testing over agreement.' },
   { id:'gemini', name:'Gemini', dot:'#378ADD',
     models:['gemini-2.5-flash','gemini-2.5-pro'],
-    persona:'Analytical lens: breadth of considerations, second-order effects, and synthesis across domains. Prioritizes completeness.' }
+    persona:'Analytical lens: breadth of considerations, second-order effects, and synthesis across domains. Prioritizes completeness.' },
+  { id:'perplexity', name:'Perplexity', dot:'#20B2AA',
+    models:['sonar','sonar-pro'],
+    persona:'Analytical lens: real-time grounded research, current evidence, and source-backed positions. Cites live data where available. Prioritizes recency and factual grounding. Be concise — state findings directly without explaining your research process or showing chain-of-thought.' }
 ];
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'multiagent_settings_v2';
 const DEFAULT_SETTINGS = {
   modelTier:'economy',
-  agentTierOverride:{ anthropic:'global', openai:'global', grok:'global', gemini:'global' },
+  agentTierOverride:{ anthropic:'global', openai:'global', grok:'global', gemini:'global', perplexity:'global' },
   maxTokens:1000,
   verbosity:'standard',
   defaultMaxRounds:'50',
@@ -684,21 +693,24 @@ const TIER_PREFERRED = {
   economy:  { anthropic:['claude-haiku-4-5','claude-haiku'],
               openai:   ['gpt-4o-mini','gpt-3.5-turbo'],
               grok:     ['grok-3-mini'],
-              gemini:   ['gemini-2.5-flash','gemini-2.0-flash-lite'] },
-  standard: { anthropic:['claude-sonnet-4-20250514','claude-sonnet'],
+              gemini:   ['gemini-2.5-flash','gemini-2.0-flash-lite'],
+              perplexity:['sonar'] },
+  standard: { anthropic:['claude-sonnet-4-5'],
               openai:   ['gpt-4o'],
               grok:     ['grok-3'],
-              gemini:   ['gemini-2.5-flash'] },
-  premium:  { anthropic:['claude-opus-4','claude-opus','claude-sonnet-4-20250514'],
+              gemini:   ['gemini-2.5-flash'],
+              perplexity:['sonar'] },
+  premium:  { anthropic:['claude-opus-4','claude-opus','claude-sonnet-4-5'],
               openai:   ['gpt-4o','gpt-4-turbo'],
               grok:     ['grok-3'],
-              gemini:   ['gemini-2.5-pro','gemini-2.5-flash'] }
+              gemini:   ['gemini-2.5-pro','gemini-2.5-flash'],
+              perplexity:['sonar-pro'] }
 };
 
 const TIER_LABELS = {
-  economy:  { anthropic:'Haiku',  openai:'GPT-4o mini', grok:'Grok-3 mini', gemini:'2.5 Flash' },
-  standard: { anthropic:'Sonnet', openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Flash' },
-  premium:  { anthropic:'Opus',   openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Pro'   }
+  economy:  { anthropic:'Haiku',  openai:'GPT-4o mini', grok:'Grok-3 mini', gemini:'2.5 Flash',  perplexity:'Sonar' },
+  standard: { anthropic:'Sonnet', openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Flash',  perplexity:'Sonar' },
+  premium:  { anthropic:'Opus',   openai:'GPT-4o',      grok:'Grok-3',      gemini:'2.5 Pro',    perplexity:'Sonar Pro' }
 };
 
 const VERBOSITY_PROMPTS = {
@@ -905,6 +917,9 @@ function parseModels(id, data) {
       case 'grok': return (data.data||[]).map(m=>m.id)
         .filter(m=>m.startsWith('grok-'))
         .sort((a,b)=>b.localeCompare(a));
+      case 'perplexity': return (data.data||[]).map(m=>m.id)
+        .filter(m=>/^sonar/.test(m))
+        .sort((a,b)=>b.localeCompare(a));
       case 'gemini': return (data.models||[])
         .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
         .map(m=>m.name.replace('models/',''))
@@ -947,6 +962,27 @@ async function fetchAllModels() {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 let providerStatus={}, enabled={}, S=null;
 
+function updateJudgeSelVisibility(){
+  const disabled = $('judge-round').value === '0';
+  const field = $('judge-agent-field');
+  if(field) field.style.opacity = disabled ? '0.4' : '1';
+  const sel = $('judge-agent');
+  if(sel) sel.disabled = disabled;
+}
+
+function buildJudgeAgentOptions(){
+  const sel = $('judge-agent');
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="auto">Auto (random)</option>' +
+    PROVIDERS.filter(p => providerStatus[p.id]).map(p =>
+      `<option value="${p.id}"${current===p.id?' selected':''}>${p.name}</option>`
+    ).join('');
+  // Restore previous selection if still valid
+  if(current && [...sel.options].some(o=>o.value===current)) sel.value = current;
+  updateJudgeSelVisibility();
+}
+
 function updateFocusPlaceholder(){
   const mode = $('focus-mode')?.value || 'general';
   const cfg = FOCUS_CONFIGS[mode] || FOCUS_CONFIGS.general;
@@ -982,6 +1018,7 @@ async function init() {
   });
   await fetchAllModels();
   updateFocusPlaceholder();
+  buildJudgeAgentOptions();
 }
 
 function buildCards() {
@@ -1078,12 +1115,24 @@ async function callGemini(model,sys,usr,agentName,signal) {
   return {text:d.candidates[0].content.parts[0].text,
           inputTokens:d.usageMetadata?.promptTokenCount||0, outputTokens:d.usageMetadata?.candidatesTokenCount||0};
 }
+async function callPerplexity(model,sys,usr,agentName,signal) {
+  const r=await fetch('/api/perplexity',{method:'POST',signal,
+    headers:sessionHeaders(agentName),
+    body:JSON.stringify({model,max_tokens:CFG.maxTokens,messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
+  const d=await r.json(); if(d.error) throw new Error('Perplexity: '+(d.error.message||JSON.stringify(d.error)));
+  const raw = d.choices[0].message.content;
+  // Strip <think>...</think> chain-of-thought blocks emitted by sonar-reasoning models
+  const text = raw.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+  return {text,
+          inputTokens:d.usage?.prompt_tokens||0, outputTokens:d.usage?.completion_tokens||0};
+}
 async function dispatch(agent,sys,usr,signal) {
   switch(agent.id){
-    case 'anthropic': return callAnthropic(agent.model,sys,usr,agent.name,signal);
-    case 'openai':    return callOpenAI(agent.model,sys,usr,agent.name,signal);
-    case 'grok':      return callGrok(agent.model,sys,usr,agent.name,signal);
-    case 'gemini':    return callGemini(agent.model,sys,usr,agent.name,signal);
+    case 'anthropic':   return callAnthropic(agent.model,sys,usr,agent.name,signal);
+    case 'openai':      return callOpenAI(agent.model,sys,usr,agent.name,signal);
+    case 'grok':        return callGrok(agent.model,sys,usr,agent.name,signal);
+    case 'gemini':      return callGemini(agent.model,sys,usr,agent.name,signal);
+    case 'perplexity':  return callPerplexity(agent.model,sys,usr,agent.name,signal);
   }
 }
 
@@ -1115,11 +1164,13 @@ const CODING_PERSONAS = {
   anthropic: 'Coding lens: correctness, type safety, and code clarity. Prioritizes readable, well-structured code that handles edge cases explicitly.',
   openai:    'Coding lens: practical implementation, standard library usage, and real-world constraints. Prioritizes code that works reliably in production.',
   grok:      'Coding lens: performance, unconventional approaches, and hidden failure modes. Stress-tests assumptions and looks for what breaks under load.',
-  gemini:    'Coding lens: breadth of approaches, security implications, and cross-platform concerns. Prioritizes completeness and awareness of tradeoffs.'
+  gemini:    'Coding lens: breadth of approaches, security implications, and cross-platform concerns. Prioritizes completeness and awareness of tradeoffs.',
+  perplexity:'Coding lens: current best practices, recent library versions, and up-to-date documentation. Prioritizes solutions that reflect the latest ecosystem state.'
 };
 const MODEL_PRICING = {
   // Anthropic
   'claude-haiku-4-5':          { in:0.80,  out:4.00  },
+  'claude-sonnet-4-5':         { in:3.00,  out:15.00 },
   'claude-sonnet-4-20250514':  { in:3.00,  out:15.00 },
   'claude-opus-4':             { in:15.00, out:75.00  },
   // OpenAI
@@ -1141,6 +1192,10 @@ const MODEL_PRICING = {
   'gemini-2.0-flash': { in:0.075, out:0.30  },
   'gemini-1.5-flash': { in:0.075, out:0.30  },
   'gemini-1.5-pro':   { in:1.25,  out:5.00  },
+  // Perplexity
+  'sonar':            { in:1.00,  out:1.00  },
+  'sonar-pro':        { in:3.00,  out:15.00 },
+  'sonar-reasoning':  { in:1.00,  out:5.00  },
 };
 
 function modelPricing(model) {
@@ -1290,11 +1345,17 @@ async function startSession(){
   if(agents.length<2){ alert('Please enable at least 2 configured agents.'); return; }
 
   const judgeRound = parseInt($('judge-round').value) || 0;
+  const judgeAgentPref = $('judge-agent')?.value || 'auto';
   const focusMode = $('focus-mode').value || 'general';
   let judgeAgent = null;
   if(judgeRound > 0 && agents.length >= 3){
-    // Pick a random agent to hold in reserve as arbitrator
-    const judgeIdx = Math.floor(Math.random() * agents.length);
+    let judgeIdx;
+    if(judgeAgentPref !== 'auto'){
+      judgeIdx = agents.findIndex(a => a.id === judgeAgentPref);
+      if(judgeIdx === -1) judgeIdx = Math.floor(Math.random() * agents.length);
+    } else {
+      judgeIdx = Math.floor(Math.random() * agents.length);
+    }
     judgeAgent = agents[judgeIdx];
     agents = agents.filter((_,i) => i !== judgeIdx);
   }
@@ -1367,15 +1428,22 @@ async function callJudge(){
   const li = document.querySelector(`#legend .legend-item[data-id="${judge.id}"]`);
   if(li){ li.style.opacity='1'; li.style.fontWeight='500'; }
 
-  const sys = `You are ${judge.name}, serving as a neutral arbitrator. You have observed this entire discussion without participating. Your role is to:
-1. Identify every unresolved disagreement between the agents.
-2. Make a clear, definitive ruling on each one — state which position is correct and why in one sentence per point.
-3. Do not hedge. Do not say "it depends" without specifying exactly what it depends on and what the answer is in each case.
+  const sys = `You are ${judge.name}, serving as a neutral arbitrator. You have observed this entire discussion without participating.
+
+ORIGINAL PROBLEM (this is what the agents were asked to solve):
+"${S.problem}"
+
+Your tasks:
+1. Check whether the debate drifted from the original problem. If it did, explicitly note what the original question was and redirect the synthesis back to it.
+2. Identify every unresolved disagreement between the agents that is relevant to the original problem. Ignore disagreements that drifted off-topic.
+3. Make a clear, definitive ruling on each relevant disagreement — one sentence per point, no hedging.
+4. Be concise. Do not restate the full debate. Do not show your reasoning process. Output rulings only.
+
 Your ruling is final and will form the basis of the final synthesis.`;
 
-  const usr = `Problem: ${S.problem}\n\nFull discussion:\n\n${
+  const usr = `Original problem: ${S.problem}\n\nFull discussion:\n\n${
     S.log.map(m=>`[${m.name} · Round ${m.round}]: ${m.text}`).join('\n\n')
-  }\n\nAs arbitrator, identify each unresolved disagreement and rule definitively on it:`;
+  }\n\nAs arbitrator: first flag any drift from the original problem, then rule definitively on each unresolved relevant disagreement:`;
 
   let ruling;
   try{
