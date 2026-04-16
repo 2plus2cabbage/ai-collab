@@ -241,7 +241,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
   <div>
     <h1>Multi-Agent Collaboration</h1>
-    <div class="sub">Autonomous consensus engine · Anthropic · OpenAI · Grok · Gemini</div>
+    <div class="sub">Autonomous consensus engine · Anthropic · OpenAI · Grok · Gemini · Perplexity</div>
   </div>
   <div class="flex gap8" style="align-items:center;margin-top:4px">
     <span id="server-status" class="pill"></span>
@@ -473,6 +473,19 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
         </label>
         <div class="hint">System messages are round markers, agent drops, and status notices.</div>
       </div>
+      <div class="field">
+        <label>Header bar stats</label>
+        <label class="check-opt active" id="chk-show-cost" style="width:fit-content;margin-bottom:6px">
+          <input type="checkbox" id="s-show-cost" checked
+            onchange="this.closest('.check-opt').classList.toggle('active',this.checked)">
+          Show running cost
+        </label>
+        <label class="check-opt" id="chk-show-tokens" style="width:fit-content">
+          <input type="checkbox" id="s-show-tokens"
+            onchange="this.closest('.check-opt').classList.toggle('active',this.checked)">
+          Show token count
+        </label>
+      </div>
     </div>
 
     <hr>
@@ -685,6 +698,8 @@ const DEFAULT_SETTINGS = {
   analysisAgent:'auto',
   colorMode:'system',
   showSysMessages:true,
+  showCost:true,
+  showTokens:false,
   threadHeight:560,
   exportFormat:'text',
   exportSys:false
@@ -766,6 +781,8 @@ function saveSettings() {
   CFG.defaultConsensusMode = $('s-consensus-mode').value;
   CFG.consensusPhrases  = $('s-consensus-phrases').value;
   CFG.showSysMessages   = $('s-show-sys').checked;
+  CFG.showCost          = $('s-show-cost').checked;
+  CFG.showTokens        = $('s-show-tokens').checked;
   CFG.threadHeight      = parseInt($('s-thread-height').value);
   CFG.analysisAgent     = $('s-analysis-agent').value;
   CFG.colorMode         = $('s-color-mode').value;
@@ -815,9 +832,13 @@ function populateSettingsForm() {
   const anlSel = $('s-analysis-agent');
   if (anlSel) anlSel.innerHTML = buildAgentOptions(CFG.analysisAgent);
   $('s-consensus-phrases').value = CFG.consensusPhrases||'';
-  $('s-show-sys').checked  = CFG.showSysMessages;
-  $('s-export-sys').checked = CFG.exportSys;
+  $('s-show-sys').checked    = CFG.showSysMessages;
+  $('s-show-cost').checked   = CFG.showCost ?? true;
+  $('s-show-tokens').checked = CFG.showTokens ?? false;
+  $('s-export-sys').checked  = CFG.exportSys;
   $('chk-sys-msg').classList.toggle('active', CFG.showSysMessages);
+  $('chk-show-cost').classList.toggle('active', CFG.showCost ?? true);
+  $('chk-show-tokens').classList.toggle('active', CFG.showTokens ?? false);
   $('chk-export-sys').classList.toggle('active', CFG.exportSys);
 }
 
@@ -1127,8 +1148,11 @@ async function callPerplexity(model,sys,usr,agentName,signal) {
     body:JSON.stringify({model,max_tokens:CFG.maxTokens,messages:[{role:'system',content:sys},{role:'user',content:usr}]})});
   const d=await r.json(); if(d.error) throw new Error('Perplexity: '+(d.error.message||JSON.stringify(d.error)));
   const raw = d.choices[0].message.content;
-  // Strip <think>...</think> chain-of-thought blocks emitted by sonar-reasoning models
-  const text = raw.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
+  // Strip <think> blocks and citation markers [1],[2] etc.
+  const text = raw
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
+    .replace(/\[\d+\]/g, '')
+    .trim();
   return {text,
           inputTokens:d.usage?.prompt_tokens||0, outputTokens:d.usage?.completion_tokens||0};
 }
@@ -1150,8 +1174,12 @@ const FOCUS_CONFIGS = {
     round1Instruction: 'Round 1 — independent response. State your position on the problem directly. No preamble, no references to other agents.',
     debateInstruction: `Round {N}. Be terse and direct. No pleasantries, no compliments, no personality. Pure substance only.`,
     lensLabel: 'Analytical lens',
-    brevityRule: `BREVITY RULE (check this first):
-If the problem has a clear, definitive, factual answer that all agents have already stated correctly in Round 1, do NOT elaborate further. Write only: "AGREEMENT: The answer is [answer]. Nothing to add." and append [CONSENSUS: YES]. Do not introduce historical context, second-order effects, or analysis unless the problem explicitly asks for it.`,
+    brevityRule: `BREVITY RULE (check this first — this takes priority over everything else):
+If the original question has a clear, definitive answer that all agents stated correctly in Round 1, the discussion is OVER. Do not introduce new facts, dates, statistics, context, or sub-topics that were not part of the original question. These are rabbit holes. A question about what college someone attended does not require discussion of when they attended, what they studied, or their GPA. Answer only what was asked.
+If all agents agree on the answer to the original question, your entire response must be exactly:
+AGREEMENT: The answer is [answer]. Nothing to add.
+[CONSENSUS: YES]
+Nothing else. No elaboration. No additional facts. No caveats.`,
     synthesisInstruction: 'Write a clear, direct final answer covering: (1) the agreed solution, (2) core reasoning, (3) next steps.'
   },
   coding: {
@@ -1161,7 +1189,10 @@ If the problem has a clear, definitive, factual answer that all agents have alre
     debateInstruction: `Round {N}. Review other agents' code. Be direct and technical. No pleasantries. Focus on correctness, efficiency, edge cases, and security.`,
     lensLabel: 'Coding lens',
     brevityRule: `BREVITY RULE (check this first):
-If all agents have converged on the same correct implementation with no substantive differences in approach, correctness, or edge-case handling, write only: "AGREEMENT: [AgentName]'s solution is correct and complete. Nothing to add." and append [CONSENSUS: YES]. Do not pad with alternative approaches that are not meaningfully better.`,
+If all agents have converged on the same correct implementation with no substantive differences in approach, correctness, or edge-case handling, your entire response must be exactly:
+AGREEMENT: [AgentName]'s solution is correct and complete. Nothing to add.
+[CONSENSUS: YES]
+Nothing else. Do not pad with alternative approaches that are not meaningfully better.`,
     synthesisInstruction: 'Write the final recommended implementation. Include: (1) the complete solution with code, (2) why this approach is correct, (3) any edge cases or caveats the operator should know.'
   }
 };
@@ -1218,23 +1249,33 @@ function tokenCost(inputTokens, outputTokens, model) {
 
 function updateCostDisplay() {
   if(!S) return;
-  const total = S.totalCost || 0;
+  const parts = [];
+  if(CFG.showCost)   parts.push(`$${(S.totalCost||0).toFixed(4)}`);
+  if(CFG.showTokens) parts.push(`${((S.totalTokens||0)/1000).toFixed(1)}k tokens`);
   const el = $('cost-display');
-  if(el) el.textContent = `$${total.toFixed(4)}`;
-  // Update legend items with per-agent costs
+  if(el) el.textContent = parts.join(' · ');
+
+  // Update legend items with per-agent costs/tokens
   (S.agents||[]).forEach(a => {
-    const cost = (S.agentCosts||{})[a.id] || 0;
     const li = document.querySelector(`#legend .legend-item[data-id="${a.id}"] span:last-child`);
-    if(li) li.textContent = `${a.name} · ${a.model} · $${cost.toFixed(4)}`;
+    if(!li) return;
+    const parts = [`${a.name} · ${a.model}`];
+    if(CFG.showCost)   parts.push(`$${((S.agentCosts||{})[a.id]||0).toFixed(4)}`);
+    if(CFG.showTokens) parts.push(`${(((S.agentTokens||{})[a.id]||0)/1000).toFixed(1)}k`);
+    li.textContent = parts.join(' · ');
   });
 }
 
 function trackCost(agent, inputTokens, outputTokens) {
   if(!S) return;
   const cost = tokenCost(inputTokens, outputTokens, agent.model);
+  const tokens = (inputTokens||0) + (outputTokens||0);
   S.agentCosts = S.agentCosts || {};
-  S.agentCosts[agent.id] = (S.agentCosts[agent.id] || 0) + cost;
-  S.totalCost = (S.totalCost || 0) + cost;
+  S.agentTokens = S.agentTokens || {};
+  S.agentCosts[agent.id]  = (S.agentCosts[agent.id]  || 0) + cost;
+  S.agentTokens[agent.id] = (S.agentTokens[agent.id] || 0) + tokens;
+  S.totalCost   = (S.totalCost   || 0) + cost;
+  S.totalTokens = (S.totalTokens || 0) + tokens;
   updateCostDisplay();
 }
 
@@ -1265,10 +1306,19 @@ async function dispatchWithRetry(agent,sys,usr,signal){
   while(attempt<max){
     try{
       const result = await dispatch(agent,sys,usr,signal);
-      const text = result?.text ?? result; // handle both object and plain string
+      let text = result?.text ?? result; // handle both object and plain string
       const inputTokens = result?.inputTokens || 0;
       const outputTokens = result?.outputTokens || 0;
       trackCost(agent, inputTokens, outputTokens);
+
+      // If agent wrote an AGREEMENT shortcut but forgot the certification tag,
+      // inject it — works whether AGREEMENT appears at start or after NEW:/CHALLENGE: etc.
+      if(/\bAGREEMENT:/i.test(text) && !/\[CONSENSUS:/i.test(text)) {
+        console.log(`[cert] Auto-injecting [CONSENSUS: YES] for ${agent.name} round ${S?.round}`);
+        text = text.trimEnd() + '\n[CONSENSUS: YES]';
+      }
+      console.log(`[cert] ${agent.name} r${S?.round} certRound=${S?.round>=2} hasConsensus=${/\[CONSENSUS:/i.test(text)}`);
+
       if(S) S.promptLog.push({
         agentId:agent.id, name:agent.name, dot:agent.dot, model:agent.model,
         round:S.round, timestamp:new Date().toISOString(), sys, usr,
@@ -1388,7 +1438,7 @@ async function startSession(){
     judgeAgent, judgeRound, focusMode,
     round:0, log:[], guidances:[], promptLog:[], consensusReached:false,
     stopped:false, errorCounts:{}, certifications:{}, lastCertifyingAgent:null,
-    agentCosts:{}, totalCost:0, done:false,
+    agentCosts:{}, totalCost:0, agentTokens:{}, totalTokens:0, done:false,
     sessionId: `s${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`
   };
 
@@ -1520,6 +1570,7 @@ async function runOneRound(){
   const nearEnd     = isFinite(S.maxRounds) && S.round >= S.maxRounds * 0.8;
   const certRound = !independent && S.consensusMode === 'auto' &&
     (S.round >= 2 || S.guidances.length > 0);
+  console.log(`[round] ${S.round} independent=${independent} consensusMode=${S.consensusMode} certRound=${certRound}`);
   const guidanceBlock = ''; // operator override now handled directly in buildPrompts
   const verbNote = VERBOSITY_PROMPTS[CFG.verbosity] || VERBOSITY_PROMPTS.standard;
 
@@ -1582,7 +1633,7 @@ async function runOneRound(){
 
 RESPONSE STRUCTURE (only if the brevity rule does not apply — follow this exactly):
 
-1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
+1. NEW POSITION (required): Before writing anything, scan your own prior responses in this transcript. Then ask yourself: "Is what I'm about to say directly responsive to the ORIGINAL QUESTION, or am I introducing a tangential sub-topic?" If tangential — do not write it. Then start with "NEW:" followed by one sentence stating what you are adding that has NOT been said before — by you or anyone else. If you have nothing genuinely new to contribute on a point, do not mention that point at all.
 
 2. CHALLENGES (if any): Challenge specific claims from other agents by quoting the exact claim and stating why it is wrong or incomplete. Format: "CHALLENGE: AgentName claimed X — wrong/incomplete because Y."
    CRITICAL: Only challenge the MOST RECENT position of each agent, not positions from earlier rounds that have already been superseded. If you already made a specific challenge in a prior round and it was not addressed, write only: "UNADDRESSED: My Round N challenge to AgentName on [topic] remains unanswered." Do NOT restate the argument. If you find yourself writing a challenge that is substantively identical to one you made in a prior round, stop — write UNADDRESSED instead.
@@ -1592,18 +1643,18 @@ RESPONSE STRUCTURE (only if the brevity rule does not apply — follow this exac
 
 4. OPEN QUESTIONS (if any): List only questions that remain genuinely unresolved.
 
-If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." and stop.` : '',
+If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." then append the CONSENSUS CERTIFICATION below.` : '',
       verbNote,
       nearEnd ? 'Final rounds — converge. State your final position on each open question directly.' : '',
-      certRound ? `CONSENSUS CERTIFICATION (mandatory — last line of your response):
+      certRound ? `CONSENSUS CERTIFICATION (mandatory — always the absolute last line of your response, no exceptions):
 [CONSENSUS: YES] — zero remaining substantive disagreements on any topic.
 [CONSENSUS: NO: <specific point(s) still unresolved>] — any disagreement on any topic.
-Strict. If in doubt, NO.` : '',
+This applies even when using the brevity rule or agreement shortcut. Strict. If in doubt, NO.` : '',
     ].filter(Boolean).join('\n');
 
     const usr = independent
       ? `Problem:\n${S.problem}\n\nProvide your independent analysis and proposed solution as ${agent.name}:`
-      : `Problem:\n${S.problem}\n\n${prior}\n\nYour response as ${agent.name}:`;
+      : `ORIGINAL QUESTION (stay scoped to this — do not introduce tangential facts or sub-topics not asked for):\n${S.problem}\n\n${prior}\n\nYour response as ${agent.name}:`;
 
     return {sys, usr};
   }
@@ -1726,8 +1777,8 @@ Strict. If in doubt, NO.` : '',
     addMsg('sys','','','',`Resuming with ${S.agents.length} agents: ${S.agents.map(a=>a.name).join(', ')}`);
   }
 
-  // Consensus check (auto mode, round 3+)
-  if(!independent && S.consensusMode==='auto' && S.round>=3){
+  // Consensus check (auto mode, round 2+)
+  if(!independent && S.consensusMode==='auto' && S.round>=2){
     const allCertified = S.agents.every(a=>S.certifications[a.id]===true);
     if(allCertified){
       S.consensusReached=true;

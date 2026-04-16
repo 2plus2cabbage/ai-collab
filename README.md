@@ -52,6 +52,7 @@ Node.js / Express (server.js, port 3001)
 - **Structured response format** — agents must label `NEW:`, `CHALLENGE:`, `REPETITION:`, `UNADDRESSED:`, or `AGREEMENT:` — no padding, no pleasantries
 - **Randomised agent order** — shuffled each round so no provider consistently anchors the discussion
 - **Identity anchoring** — each agent is explicitly told which transcript entries are their own prior responses, preventing cross-agent identity confusion
+- **Scope anchoring** — the original question is prepended to every round 2+ prompt as a reminder of what was actually asked, preventing agents from debating tangential sub-topics they introduced themselves
 - **Brevity rule** — if the question has a clear factual answer all agents stated correctly in Round 1, agents are instructed to certify consensus immediately rather than padding with analysis
 
 ### Focus Modes
@@ -66,7 +67,8 @@ A **Focus mode** selector on the main page changes how agents approach the probl
 Switching modes changes the textarea placeholder, per-agent system prompts, debate framing, and synthesis instruction. Additional modes (Medical, Legal, Financial, Technical Architecture) can be added by extending the `FOCUS_CONFIGS` table in `index.html`.
 
 ### Consensus System
-- **Self-certification** — from Round 2, each agent appends `[CONSENSUS: YES]` or `[CONSENSUS: NO: reason]` to every response
+- **Self-certification** — from Round 2, each agent appends `[CONSENSUS: YES]` or `[CONSENSUS: NO: reason]` to every response when the full response structure is active
+- **Brevity short-circuit** — for simple factual questions where all agents agreed in Round 1, agents write `AGREEMENT: The answer is X. Nothing to add.` followed by `[CONSENSUS: YES]` on the next line, skipping the full debate structure
 - **All-or-nothing** — consensus only fires when every active agent certifies YES in the same round
 - **Reserve arbitrator** — one agent is held completely out of the debate; if consensus is not reached by a configurable round (default: Round 10), it enters, reviews the full transcript, rules definitively on each unresolved point, and writes the synthesis
 - **Arbitrator selection** — the arbitrator can be designated explicitly (e.g. always use Perplexity for live-data grounding) or selected randomly
@@ -252,6 +254,7 @@ Prompts that tend to over-debate:
 - Open-ended "most important factor" questions — agents manufacture disagreement to fill the response structure
 - Simple factual lookups — the brevity rule handles these but keep prompts specific
 - Questions without a decision to make — "tell me about X" produces elaboration, not debate
+- Narrow factual questions where agents agree on the answer but introduce unsolicited tangential facts — e.g. asking what college an athlete attended may trigger agents to debate attendance dates or academic record. The scope anchor system is designed to prevent this but cannot eliminate it entirely when one agent introduces an incorrect tangential claim that others feel compelled to correct.
 
 ---
 
@@ -316,7 +319,13 @@ Model dropdowns populate live from each provider's model list API. Click ⟳ on 
 ```
 Round 1:  All agents respond independently (no cross-visibility) — in parallel
 Round 2+: All agents see full prior transcript, respond in parallel
-          Each agent appends to every response:
+
+          BREVITY PATH (simple factual questions where Round 1 was unanimous):
+            "AGREEMENT: The answer is X. Nothing to add."
+            [CONSENSUS: YES]
+
+          FULL DEBATE PATH (complex or contested questions):
+            Each agent appends to every response:
             [CONSENSUS: YES]  — zero remaining substantive disagreements
             [CONSENSUS: NO: reason]  — any disagreement on any topic
 

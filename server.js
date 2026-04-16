@@ -65,6 +65,12 @@ function stripThinkBlocks(text) {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, '').trim();
 }
 
+// Strip citation reference markers that Perplexity appends e.g. [1], [2][3]
+function stripCitations(text) {
+  if (!text) return text;
+  return text.replace(/\[\d+\]/g, '').trim();
+}
+
 // Extract the structured fields we want to log from each provider's request/response format
 function extractFields(provider, reqBody, resData) {
   try {
@@ -90,7 +96,7 @@ function extractFields(provider, reqBody, resData) {
         model:        reqBody.model,
         systemPrompt: reqBody.messages?.find(m => m.role === 'system')?.content || '',
         userPrompt:   reqBody.messages?.filter(m => m.role === 'user').slice(-1)[0]?.content || '',
-        response:     stripThinkBlocks(resData.choices?.[0]?.message?.content || ''),
+        response:     stripCitations(stripThinkBlocks(resData.choices?.[0]?.message?.content || '')),
         inputTokens:  resData.usage?.prompt_tokens,
         outputTokens: resData.usage?.completion_tokens
       };
