@@ -324,7 +324,10 @@ app.post('/api/grok', (req, res) => {
 app.get('/api/perplexity/models', (req, res) => {
   if (!process.env.PERPLEXITY_API_KEY)
     return res.status(503).json({ error: { message: 'PERPLEXITY_API_KEY not set' } });
-  // Perplexity doesn't have a /models endpoint — return a static known list
+  // Perplexity doesn't have a /models endpoint — return known models.
+  // Non-reasoning models listed first so they sort as defaults.
+  // Reasoning models (sonar-reasoning*) emit <think> blocks which are stripped
+  // automatically before display, but add latency and token cost.
   res.json({ data: [
     { id:'sonar' },
     { id:'sonar-pro' },

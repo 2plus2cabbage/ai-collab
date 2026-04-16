@@ -919,7 +919,12 @@ function parseModels(id, data) {
         .sort((a,b)=>b.localeCompare(a));
       case 'perplexity': return (data.data||[]).map(m=>m.id)
         .filter(m=>/^sonar/.test(m))
-        .sort((a,b)=>b.localeCompare(a));
+        .sort((a,b)=>{
+          // Non-reasoning models first, then reasoning models
+          const aR = a.includes('reasoning'), bR = b.includes('reasoning');
+          if(aR !== bR) return aR ? 1 : -1;
+          return a.localeCompare(b);
+        });
       case 'gemini': return (data.models||[])
         .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
         .map(m=>m.name.replace('models/',''))
@@ -1232,7 +1237,18 @@ function trackCost(agent, inputTokens, outputTokens) {
   updateCostDisplay();
 }
 
-// ─── Error helpers ────────────────────────────────────────────────────────────
+// High-limit dispatch for arbitration and synthesis — these need more tokens
+// than regular debate rounds to produce complete rulings and summaries
+async function dispatchHighLimit(agent, sys, usr) {
+  const savedMax = CFG.maxTokens;
+  CFG.maxTokens = Math.max(CFG.maxTokens, 2000);
+  try {
+    const result = await dispatch(agent, sys, usr, null);
+    return result;
+  } finally {
+    CFG.maxTokens = savedMax;
+  }
+}
 const TRANSIENT=['high demand','rate limit','quota','try again later','temporarily',
   'overloaded','503','529','capacity','spike','server had an error','sorry about that',
   'internal server error','service unavailable','bad gateway','502','500'];
@@ -1447,15 +1463,16 @@ Your ruling is final and will form the basis of the final synthesis.`;
 
   let ruling;
   try{
-    const result = await dispatchWithRetry(judge, sys, usr, null);
+    const result = await dispatchHighLimit(judge, sys, usr);
     ruling = result?.text ?? result;
+    trackCost(judge, result?.inputTokens||0, result?.outputTokens||0);
   } catch(e){
-    // Judge failed — fall back to a random active agent
     const fallback = S.agents[Math.floor(Math.random() * S.agents.length)];
     addMsg('sys','','','',`⚠ ${judge.name} arbitration failed (${e.message}) — falling back to ${fallback.name}.`);
     try {
-      const result = await dispatchWithRetry(fallback, sys, usr, null);
+      const result = await dispatchHighLimit(fallback, sys, usr);
       ruling = result?.text ?? result;
+      trackCost(fallback, result?.inputTokens||0, result?.outputTokens||0);
     } catch(e2) {
       ruling = `⚠ Arbitration failed: ${e2.message}`;
     }
@@ -1866,7 +1883,7 @@ Be concise — 4 to 6 sentences per section.`;
   }${S.judgeRuling ? `\n\nYour arbitrator ruling:\n${S.judgeRuling}` : ''}\n\nWrite the synthesis now.`;
   let summary;
   try{
-    const result = await dispatch(ag,sys,usr);
+    const result = await dispatchHighLimit(ag, sys, usr);
     summary = result?.text ?? result;
     trackCost(ag, result?.inputTokens||0, result?.outputTokens||0);
   }catch(e){ summary=`⚠ Synthesis error: ${e.message}`; }
