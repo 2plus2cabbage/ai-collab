@@ -257,6 +257,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
       <label>Problem / task</label>
       <textarea id="problem" rows="4"
         placeholder="Describe the problem clearly. Include data, constraints, and what a good solution looks like."></textarea>
+      <button onclick="clearProblem()" style="font-size:11px;padding:3px 10px;margin-top:5px;color:var(--text2)" title="Clear the problem field">✕ Clear prompt</button>
     </div>
     <div class="flex gap10 wrap-row" style="margin-bottom:14px">
       <div class="field" style="margin:0;flex:0 0 auto">
@@ -542,7 +543,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
         <button id="stop-btn" class="stop" onclick="stopSession()" style="font-size:12px;padding:5px 12px">⏹ Stop</button>
         <button onclick="exportTranscript()" style="font-size:12px;padding:5px 12px">Export</button>
         <button onclick="showLogs()" style="font-size:12px;padding:5px 12px">📋 Logs</button>
-        <button onclick="confirmReset()" style="font-size:12px;padding:5px 12px">Reset</button>
+        <button onclick="confirmReset()" style="font-size:12px;padding:5px 12px">↺ New Session</button>
       </div>
     </div>
     <div class="rbar">
@@ -562,7 +563,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
     <div id="stopped-actions" class="hidden" style="padding:10px 0 4px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="primary" onclick="generateSynthesisManual()">Generate synthesis ↗</button>
       <button onclick="exportTranscript()">Export transcript</button>
-      <button onclick="confirmReset()">Reset</button>
+      <button onclick="confirmReset()">↺ New Session</button>
     </div>
   </div>
 
@@ -978,13 +979,13 @@ function updateJudgeSelVisibility(){
 function buildJudgeAgentOptions(){
   const sel = $('judge-agent');
   if(!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="auto">Auto (random)</option>' +
+  const current = sel.value || 'auto';
+  sel.innerHTML = '<option value="auto"' + (current==='auto'?' selected':'') + '>Auto (random)</option>' +
     PROVIDERS.filter(p => providerStatus[p.id]).map(p =>
       `<option value="${p.id}"${current===p.id?' selected':''}>${p.name}</option>`
     ).join('');
-  // Restore previous selection if still valid
-  if(current && [...sel.options].some(o=>o.value===current)) sel.value = current;
+  // Explicitly set value to ensure browser reflects the selection
+  sel.value = [...sel.options].some(o=>o.value===current) ? current : 'auto';
   updateJudgeSelVisibility();
 }
 
@@ -1362,6 +1363,7 @@ async function startSession(){
 
   const judgeRound = parseInt($('judge-round').value) || 0;
   const judgeAgentPref = $('judge-agent')?.value || 'auto';
+  console.log('[judge] round:', judgeRound, 'pref:', judgeAgentPref);
   const focusMode = $('focus-mode').value || 'general';
   let judgeAgent = null;
   if(judgeRound > 0 && agents.length >= 3){
@@ -2299,6 +2301,11 @@ async function deleteHistorySession() {
     hideHistoryDetail();
     loadHistoryList();
   } catch(e) { alert('Delete failed: ' + e.message); }
+}
+
+function clearProblem(){
+  $('problem').value='';
+  $('problem').focus();
 }
 
 function confirmReset(){

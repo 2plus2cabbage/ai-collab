@@ -78,6 +78,8 @@ Switching modes changes the textarea placeholder, per-agent system prompts, deba
 - **Use as final answer** — operator types a definitive answer in the guidance field and clicks this button to bypass all further rounds and go straight to synthesis
 - **Agent closes** — operator selects any active agent at a checkpoint to act as immediate arbitrator
 - **Stop** — cancels all in-flight parallel fetches simultaneously via shared AbortController
+- **↺ New Session** — returns to the setup page with the prior prompt intact, ready to run again or modify
+- **✕ Clear prompt** — clears the problem textarea on the setup page
 - **Agent drop handling** — permanent errors trigger a drop confirmation; session continues if ≥2 agents remain
 
 ### Perplexity Integration
