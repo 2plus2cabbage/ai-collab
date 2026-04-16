@@ -85,10 +85,20 @@ Perplexity is the only provider in this system with **live web search** built in
 
 This creates a meaningful role distinction:
 
-- **Perplexity as a debate agent** — useful for questions where current data shapes the analysis (market conditions, recent research, live pricing)
-- **Perplexity as the arbitrator** — recommended for most sessions; it stays out of the debate entirely and enters at Round 10 with live-grounded facts to resolve any factual disagreements definitively
+- **Perplexity as a debate agent** — its live data is in the conversation from Round 1. The other agents can see and respond to current facts. Best for questions where recency shapes the analysis (market conditions, recent research, live pricing). No separate review runs because the live data was already part of the debate.
+- **Perplexity as the arbitrator** — stays out of the debate entirely and enters at the configured round with live-grounded facts to resolve disagreements definitively. If consensus is reached before arbitration fires, the automatic current events review runs instead (see below).
 
-For purely analytical, strategic, or historical questions where recency doesn't matter, Perplexity's web search advantage is less relevant and it functions like any other agent.
+**Automatic current events review:** Whenever Perplexity did not participate as an active debate agent — whether it was held in reserve as arbitrator, disabled, or the arbitrator round was never reached — it automatically runs a factual verification of the final synthesis after the session ends. This catches the failure mode where four agents with stale training data confidently agree on an incorrect answer before Perplexity can intervene.
+
+The review appears as a distinct teal card below the final synthesis, structured as:
+- ✓ **CONFIRMED** — facts that check out against live data
+- ⚠ **CORRECTION** — factual errors with the correct current information
+- 📅 **OUTDATED** — information that was previously correct but has changed
+- ➕ **ADDITIONAL CONTEXT** — relevant current information the agents lacked
+
+The review only runs if a Perplexity API key is configured, regardless of whether the Perplexity agent card is toggled on in the UI.
+
+For purely analytical, strategic, or historical questions where recency doesn't matter, the review will typically confirm the consensus and add nothing material. For current events questions it is the safety net that prevents four confidently wrong agents from producing an unchallenged incorrect answer.
 
 ### Cost Visibility
 - Live session total cost displayed in the header bar, updated after every agent call
@@ -215,7 +225,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 1. **Configure agents** — check the providers you want to include; select models and review the analytical lens for each
 2. **Select focus mode** — General for analysis and strategy; Coding for implementation and review
-3. **Set arbitrator** — choose which round the arbitrator activates (default: Round 10) and which agent to use (default: random; consider Perplexity for live-data grounding)
+3. **Set arbitrator** — choose which round the arbitrator activates (default: Round 10) and which agent to use (Perplexity recommended for live-data grounding); if Perplexity is configured but not debating, it automatically runs a current events fact-check after every session regardless
 4. **Enter a problem** — specific, debatable questions with concrete constraints work best
 5. **Start** — Round 1 runs in parallel independently; from Round 2 agents debate the full transcript
 6. **Monitor** — watch consensus certifications appear on each message; cost accumulates in the header bar
@@ -267,7 +277,7 @@ Prompts that tend to over-debate:
 | OpenAI | gpt-4o-mini | gpt-4o | No | Strict model allowlist to exclude non-chat models |
 | Grok (xAI) | grok-3-mini | grok-3 | No | OpenAI-compatible endpoint at api.x.ai |
 | Gemini | gemini-2.5-flash | gemini-2.5-pro | No | Model name goes in URL, not body |
-| Perplexity | sonar | sonar-pro | **Yes** | Live web search on every call; best used as arbitrator |
+| Perplexity | sonar | sonar-pro | **Yes** | Live web search on every call; functions as debate agent, arbitrator, or automatic post-synthesis fact-checker |
 
 Model dropdowns populate live from each provider's model list API. Click ⟳ on any agent card to refresh. Perplexity's model list is static (no /models endpoint).
 

@@ -1901,6 +1901,72 @@ Be concise — 4 to 6 sentences per section.`;
 
   // Persist session server-side for history browsing
   saveSession(summary, ag.name);
+
+  // Perplexity current events review — triggers whenever Perplexity did NOT
+  // participate as an active debate agent. This catches two cases:
+  // 1. Perplexity was the designated arbitrator but consensus fired before it
+  //    could enter — the four stale agents may have agreed on wrong facts
+  // 2. Perplexity was disabled entirely — same risk, no live data in the debate
+  // The only case this does NOT run is when Perplexity was an active debater,
+  // in which case its live data was already part of the conversation.
+  const perplexityDebated = S.agents.some(a => a.id === 'perplexity');
+  if(!perplexityDebated && providerStatus.perplexity){
+    const perplexityProvider = PROVIDERS.find(p => p.id === 'perplexity');
+    const reviewAgent = S.judgeAgent?.id === 'perplexity'
+      ? S.judgeAgent  // use the reserved judge instance
+      : { ...perplexityProvider, model: perplexityProvider.models[0] }; // construct from provider defaults
+    await generatePerplexityReview(reviewAgent, summary);
+  }
+}
+
+// ─── Perplexity current events review ─────────────────────────────────────────
+async function generatePerplexityReview(perplexityAgent, synthesis) {
+  setStatus('Perplexity reviewing against live data…');
+  addMsg('sys','','','','🌐 Perplexity running current events review…');
+
+  const sys = `You are Perplexity, performing a factual accuracy review using live web search.
+The agents have reached a conclusion. Your job is to verify it against current real-world data.
+
+Be direct and concise. Structure your review as:
+✓ CONFIRMED: [facts that are accurate]
+⚠ CORRECTION: [any factual errors with the correct current information]
+📅 OUTDATED: [anything that may have been true previously but has changed]
+➕ ADDITIONAL CONTEXT: [relevant current information the agents lacked]
+
+If everything checks out, say so briefly. Do not restate the full synthesis.`;
+
+  const usr = `Original problem: ${S.problem}
+
+Agents' conclusion:
+${synthesis}
+
+Using live search, verify this conclusion against current facts. Flag any errors, outdated information, or important missing context:`;
+
+  try {
+    const result = await dispatchHighLimit(perplexityAgent, sys, usr);
+    const review = result?.text ?? result;
+    trackCost(perplexityAgent, result?.inputTokens||0, result?.outputTokens||0);
+
+    // Display as a distinct card with Perplexity's teal colour
+    const thread = $('thread');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.style.cssText = `border-left-color:#20B2AA;border-left-width:3px;background:var(--bg2)`;
+    div.innerHTML = `<div class="msg-head">
+      <span class="dot" style="background:#20B2AA"></span>
+      <span class="msg-name" style="color:#20B2AA">🌐 Perplexity · Current Events Review</span>
+      <span class="msg-round" style="font-size:11px;margin-left:8px;color:var(--text3)">live data verification</span>
+    </div><div class="msg-text">${esc(review)}</div>`;
+    thread.appendChild(div);
+    thread.scrollTop = thread.scrollHeight;
+
+    // Log it
+    S.log.push({agentId:'perplexity', name:'Perplexity (Current Events Review)',
+      dot:'#20B2AA', round:S.round, text:review});
+  } catch(e) {
+    addMsg('sys','','','',`⚠ Perplexity review failed: ${e.message}`);
+  }
+  setStatus('',false);
 }
 
 function stopSession(){
