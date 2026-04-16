@@ -1176,10 +1176,10 @@ const FOCUS_CONFIGS = {
     lensLabel: 'Analytical lens',
     brevityRule: `BREVITY RULE (check this first — this takes priority over everything else):
 If the original question has a clear, definitive answer that all agents stated correctly in Round 1, the discussion is OVER. Do not introduce new facts, dates, statistics, context, or sub-topics that were not part of the original question. These are rabbit holes. A question about what college someone attended does not require discussion of when they attended, what they studied, or their GPA. Answer only what was asked.
-If all agents agree on the answer to the original question, your entire response must be exactly:
+If all agents agree on the answer to the original question AND there are no live CHALLENGE or UNADDRESSED items from prior rounds, your entire response must be exactly:
 AGREEMENT: The answer is [answer]. Nothing to add.
 [CONSENSUS: YES]
-Nothing else. No elaboration. No additional facts. No caveats.`,
+WARNING: Do NOT use this shortcut if any CHALLENGE or UNADDRESSED item from a prior round is still live. Using AGREEMENT while disagreements exist is a false consensus and will be rejected.`,
     synthesisInstruction: 'Write a clear, direct final answer covering: (1) the agreed solution, (2) core reasoning, (3) next steps.'
   },
   coding: {
@@ -1311,12 +1311,22 @@ async function dispatchWithRetry(agent,sys,usr,signal){
       const outputTokens = result?.outputTokens || 0;
       trackCost(agent, inputTokens, outputTokens);
 
-      // If agent wrote an AGREEMENT shortcut but forgot the certification tag,
-      // inject it — works whether AGREEMENT appears at start or after NEW:/CHALLENGE: etc.
-      if(/\bAGREEMENT:/i.test(text) && !/\[CONSENSUS:/i.test(text)) {
+      // Only auto-inject [CONSENSUS: YES] when the response is purely an AGREEMENT
+      // shortcut — i.e. the entire response is just the AGREEMENT line with nothing else.
+      // Do NOT inject if AGREEMENT appears mid-response as part of normal discourse.
+      const trimmed = text.trim();
+      if(/^AGREEMENT:/i.test(trimmed) && trimmed.split('\n').length <= 2 && !/\[CONSENSUS:/i.test(text)) {
         console.log(`[cert] Auto-injecting [CONSENSUS: YES] for ${agent.name} round ${S?.round}`);
-        text = text.trimEnd() + '\n[CONSENSUS: YES]';
+        text = trimmed + '\n[CONSENSUS: YES]';
       }
+
+      // If agent certified YES but their response contains active challenges or unresolved items,
+      // flip it to NO — they cannot be in consensus while still raising disagreements
+      if(/\[CONSENSUS:\s*YES\]/i.test(text) && /\b(CHALLENGE:|UNADDRESSED:|OPEN QUESTIONS?:)/i.test(text)) {
+        console.log(`[cert] Flipping YES→NO for ${agent.name} r${S?.round} — response contains active challenges`);
+        text = text.replace(/\[CONSENSUS:\s*YES\]/gi, '[CONSENSUS: NO: active challenges remain in this response]');
+      }
+
       console.log(`[cert] ${agent.name} r${S?.round} certRound=${S?.round>=2} hasConsensus=${/\[CONSENSUS:/i.test(text)}`);
 
       if(S) S.promptLog.push({
@@ -1645,10 +1655,10 @@ RESPONSE STRUCTURE (only if the brevity rule does not apply — follow this exac
 
 If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." then append the CONSENSUS CERTIFICATION below.` : '',
       verbNote,
-      nearEnd ? 'Final rounds — converge. State your final position on each open question directly.' : '',
+      nearEnd ? 'Final rounds — state your final position on each open question directly and concisely. Do NOT abandon genuine disagreements just because the session is ending. If you still disagree, certify NO.' : '',
       certRound ? `CONSENSUS CERTIFICATION (mandatory — always the absolute last line of your response, no exceptions):
-[CONSENSUS: YES] — zero remaining substantive disagreements on any topic.
-[CONSENSUS: NO: <specific point(s) still unresolved>] — any disagreement on any topic.
+[CONSENSUS: YES] — ONLY if your response contains NO CHALLENGE, NO UNADDRESSED, and NO OPEN QUESTIONS. If you raised any challenge or flagged any unresolved point anywhere in this response, you MUST certify NO.
+[CONSENSUS: NO: <specific point(s) still unresolved>] — if your response contains ANY CHALLENGE, UNADDRESSED, or OPEN QUESTION, or if any disagreement remains.
 This applies even when using the brevity rule or agreement shortcut. Strict. If in doubt, NO.` : '',
     ].filter(Boolean).join('\n');
 
