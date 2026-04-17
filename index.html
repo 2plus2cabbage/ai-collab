@@ -1260,6 +1260,64 @@ async function callPerplexity(model,sys,usr,agentName,signal) {
   return {text,
           inputTokens:d.usage?.prompt_tokens||0, outputTokens:d.usage?.completion_tokens||0};
 }
+// Render text — converts markdown code blocks to styled blocks with copy buttons.
+function renderContent(text) {
+  // If the text contains an unclosed code block (truncation), close it
+  const backtickCount = (text.match(/```/g) || []).length;
+  const workingText = backtickCount % 2 !== 0 ? text + '\n```' : text;
+
+  const parts = [];
+  const codeBlockRe = /```(\w*)\n?([\s\S]*?)```/g;
+  let last = 0, m;
+  while((m = codeBlockRe.exec(workingText)) !== null) {
+    if(m.index > last) parts.push(`<div class="msg-text">${esc(workingText.slice(last, m.index))}</div>`);
+    const lang = m[1] || '';
+    const code = m[2];
+    const id = 'cb-' + Math.random().toString(36).slice(2,8);
+    parts.push(`<div data-codblock style="margin:8px 0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:var(--bg3);border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text3)">${esc(lang)||'code'}</span>
+        <button id="${id}" onclick="copyCode('${id}')" style="font-size:11px;padding:2px 8px">Copy</button>
+      </div>
+      <pre style="margin:0;padding:10px;overflow-x:auto;font-size:12px;line-height:1.5"><code>${esc(code)}</code></pre>
+    </div>`);
+    last = m.index + m[0].length;
+  }
+  if(last < workingText.length) parts.push(`<div class="msg-text">${esc(workingText.slice(last))}</div>`);
+  return parts.join('') || `<div class="msg-text">${esc(text)}</div>`;
+}
+
+function copyCode(btnId) {
+  const btn = $(btnId);
+  if(!btn) return;
+  const container = btn.closest('[data-codblock]');
+  const code = container?.querySelector('code')?.textContent || '';
+
+  const doFallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = code;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try {
+      document.execCommand('copy');
+      btn.textContent = '✓ Copied';
+    } catch(e) {
+      btn.textContent = 'Failed';
+    }
+    document.body.removeChild(ta);
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  };
+
+  if(navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(code)
+      .then(() => { btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = 'Copy', 2000); })
+      .catch(doFallback);
+  } else {
+    doFallback();
+  }
+}
+
 async function dispatch(agent,sys,usr,signal) {
   switch(agent.id){
     case 'anthropic':   return callAnthropic(agent.model,sys,usr,agent.name,signal);
@@ -1289,15 +1347,15 @@ WARNING: Do NOT use this shortcut if any CHALLENGE or UNADDRESSED item from a pr
   coding: {
     label: 'Coding',
     problemPlaceholder: 'Describe the coding task. Include language, framework, constraints, and what correct output or behaviour looks like. Paste existing code if relevant.',
-    round1Instruction: 'Round 1 — independent response. Provide your own solution or analysis of the code. Show your implementation or diagnosis directly. No preamble.',
-    debateInstruction: `Round {N}. Review other agents' code. Be direct and technical. No pleasantries. Focus on correctness, efficiency, edge cases, and security.`,
+    round1Instruction: 'Round 1 — independent response. Provide your own solution or analysis of the code. Show your implementation or diagnosis directly. No preamble. ALL code must be wrapped in triple-backtick code blocks with the language specified e.g. ```python or ```javascript.',
+    debateInstruction: `Round {N}. Review other agents' code. Be direct and technical. No pleasantries. Focus on correctness, efficiency, edge cases, and security. ALL code must be wrapped in triple-backtick code blocks with the language specified.`,
     lensLabel: 'Coding lens',
     brevityRule: `BREVITY RULE (check this first):
 If all agents have converged on the same correct implementation with no substantive differences in approach, correctness, or edge-case handling, your entire response must be exactly:
 AGREEMENT: [AgentName]'s solution is correct and complete. Nothing to add.
 [CONSENSUS: YES]
 Nothing else. Do not pad with alternative approaches that are not meaningfully better.`,
-    synthesisInstruction: 'Write the final recommended implementation. Include: (1) the complete solution with code, (2) why this approach is correct, (3) any edge cases or caveats the operator should know.'
+    synthesisInstruction: `Write the final recommended implementation. You MUST include the complete, working code or script — not a summary, not pseudocode, not a partial snippet. ALL code must be in triple-backtick code blocks with the language specified e.g. \`\`\`python. Include: (1) the complete solution with full code in a code block, (2) why this approach is correct, (3) any edge cases or caveats the operator should know. If the solution requires multiple files, include all of them completely each in their own code block.`
   }
 };
 
@@ -1387,7 +1445,9 @@ function trackCost(agent, inputTokens, outputTokens) {
 // than regular debate rounds to produce complete rulings and summaries
 async function dispatchHighLimit(agent, sys, usr) {
   const savedMax = CFG.maxTokens;
-  CFG.maxTokens = Math.max(CFG.maxTokens, 2000);
+  // Coding synthesis needs more room for complete scripts — use 4000 minimum
+  const minTokens = S?.focusMode === 'coding' ? 4000 : 2000;
+  CFG.maxTokens = Math.max(CFG.maxTokens, minTokens);
   try {
     const result = await dispatch(agent, sys, usr, null);
     return result;
@@ -1938,12 +1998,15 @@ This applies even when using the brevity rule or agreement shortcut. Strict. If 
         : `<span style="display:inline-block;margin-left:8px;font-size:11px;font-weight:500;padding:1px 8px;border-radius:20px;background:#FAEEDA;color:#633806">✗ ${esc(certificationReason(resp))}</span>`;
     }
     if(ph){
+      const bodyHtml = S.focusMode === 'coding'
+        ? renderContent(displayResp)
+        : `<div class="msg-text">${esc(displayResp)}</div>`;
       ph.innerHTML = `<div class="msg-head">
         <span class="dot" style="background:${agent.dot}"></span>
         <span class="msg-name">${agent.name}</span>
         <span class="msg-round">Round ${S.round}</span>
         ${certBadge}
-      </div><div class="msg-text">${esc(displayResp)}</div>`;
+      </div>${bodyHtml}`;
     }
   }
   $('thread').scrollTop = $('thread').scrollHeight;
@@ -2108,17 +2171,20 @@ async function generateSynthesis(){
   const ag = S.lastCertifyingAgent || lastResponder;
 
   const focus = FOCUS_CONFIGS[S.focusMode] || FOCUS_CONFIGS.general;
+  const codingNote = S.focusMode === 'coding'
+    ? '\nCRITICAL: This is a coding session. Your synthesis MUST include the complete, working code or script. No pseudocode, no partial snippets, no summaries of what the code should do. Full working code only.'
+    : '';
   const sys = S.judgeRuling
     ? `You are ${ag.name}. You just served as arbitrator and issued a ruling. Now write the final synthesis based on your ruling and the full discussion.
-Write: (1) the final recommended solution incorporating your rulings, (2) the core reasoning, (3) next steps.
+Write: (1) the final recommended solution incorporating your rulings, (2) the core reasoning, (3) next steps.${codingNote}
 Do NOT include a disagreements section — your ruling resolved them. Be concise — 4 to 6 sentences per section.`
     : S.consensusReached
     ? `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration that reached consensus.
-${focus.synthesisInstruction}
+${focus.synthesisInstruction}${codingNote}
 Do NOT include a disagreements section — the agents reached full consensus with none remaining.
 Be concise — 4 to 6 sentences per section.`
     : `You are ${ag.name}, writing the final synthesis of a multi-agent collaboration.
-${focus.synthesisInstruction}
+${focus.synthesisInstruction}${codingNote}
 Also note any remaining disagreements or open questions if any exist.
 Be concise — 4 to 6 sentences per section.`;
 
@@ -2133,7 +2199,20 @@ Be concise — 4 to 6 sentences per section.`;
   }catch(e){ summary=`⚠ Synthesis error: ${e.message}`; }
   setStatus('',false);
   const synthLabel = `Final Synthesis · written by ${ag.name}`;
-  addMsg('agent', synthLabel, ag.dot, summary, true);
+  const synthHtml = S.focusMode === 'coding' ? renderContent(summary) : null;
+  if(synthHtml){
+    const thread = $('thread');
+    const div = document.createElement('div');
+    div.className = 'msg msg-synth';
+    div.innerHTML = `<div class="msg-head">
+      <span class="dot" style="background:${ag.dot}"></span>
+      <span class="msg-name">${esc(synthLabel)}</span>
+    </div>${synthHtml}`;
+    thread.appendChild(div);
+    thread.scrollTop = thread.scrollHeight;
+  } else {
+    addMsg('agent', synthLabel, ag.dot, summary, true);
+  }
   addMsg('sys','','','',
     `✓ Complete · ${S.round} round${S.round!==1?'s':''} · `+
     (S.consensusReached?'consensus reached':'ended by operator')+

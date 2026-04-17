@@ -62,9 +62,15 @@ A **Focus mode** selector on the main page changes how agents approach the probl
 | Mode | Best for | Agent lenses | Synthesis output |
 |---|---|---|---|
 | **General** | Strategy, analysis, decisions, research, factual questions | Logical structure · Practical implementation · Stress-testing · Breadth & synthesis | Recommended solution, reasoning, next steps |
-| **Coding** | Implementation, code review, debugging, architecture | Correctness & clarity · Production reliability · Performance & failure modes · Security & tradeoffs | Complete solution with code, correctness rationale, edge cases |
+| **Coding** | Implementation, code review, debugging, architecture | Correctness & clarity · Production reliability · Performance & failure modes · Security & tradeoffs | Complete working code in copyable code blocks, correctness rationale, edge cases |
 
 Switching modes changes the textarea placeholder, per-agent system prompts, debate framing, and synthesis instruction. Additional modes (Medical, Legal, Financial, Technical Architecture) can be added by extending the `FOCUS_CONFIGS` table in `index.html`.
+
+In **Coding mode** specifically:
+- All agents are instructed to wrap every code snippet in triple-backtick fenced blocks with a language tag (e.g. ` ```python `)
+- Code blocks render with a language label and a **Copy** button — works on both HTTP and HTTPS
+- The synthesis and arbitrator ruling use a higher token limit (4000 minimum) to accommodate complete scripts
+- Unclosed code blocks caused by token truncation are automatically closed before rendering so partial scripts still appear in a copyable block
 
 ### Consensus System
 - **Self-certification** — from Round 2, each agent appends `[CONSENSUS: YES]` or `[CONSENSUS: NO: reason]` to every response when the full response structure is active
@@ -274,7 +280,7 @@ Prompts that tend to over-debate:
 |---|---|---|
 | Focus mode | General | General or Coding — changes agent lenses, debate framing, and synthesis format |
 | Model tier | Economy | Economy/Standard/Premium — selects models per tier across all providers |
-| Max tokens | 1000 | Per-response token limit across all providers |
+| Max tokens | 1000 | Per-response token limit for debate rounds; arbitration and synthesis use 2000 minimum, coding synthesis uses 4000 minimum |
 | Verbosity | Standard | Concise/Standard/Detailed — injected into system prompts |
 | Pause every | 10 rounds | Checkpoint frequency for operator review |
 | Consensus detection | Auto | Auto (agent self-certification) or Run to max rounds |
