@@ -247,6 +247,7 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
     <span id="server-status" class="pill"></span>
     <button onclick="showHistory()" style="font-size:13px;padding:5px 14px">📂 History</button>
     <button id="settings-btn" onclick="showSettings()" style="font-size:13px;padding:5px 14px">⚙ Settings</button>
+    <button onclick="showHelp()" style="font-size:13px;padding:5px 14px">? Help</button>
   </div>
 </div>
 
@@ -257,7 +258,10 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
       <label>Problem / task</label>
       <textarea id="problem" rows="4"
         placeholder="Describe the problem clearly. Include data, constraints, and what a good solution looks like."></textarea>
-      <button onclick="clearProblem()" style="font-size:11px;padding:3px 10px;margin-top:5px;color:var(--text2)" title="Clear the problem field">✕ Clear prompt</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <button onclick="clearProblem()" style="font-size:11px;padding:3px 10px;color:var(--text2)" title="Clear the problem field">✕ Clear prompt</button>
+        <button class="primary" onclick="startSession()" style="padding:7px 20px">Start collaboration ↗</button>
+      </div>
     </div>
     <div class="flex gap10 wrap-row" style="margin-bottom:14px">
       <div class="field" style="margin:0;flex:0 0 auto">
@@ -312,9 +316,13 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
           <option value="auto">Auto (random)</option>
         </select>
       </div>
-      <button class="primary" onclick="startSession()" style="align-self:flex-end;padding:8px 22px">
-        Start collaboration ↗
-      </button>
+      <div class="field" style="margin:0;flex:0 0 auto" id="moderator-field">
+        <label>Moderation</label>
+        <select id="moderator-mode" style="width:120px">
+          <option value="0">Disabled</option>
+          <option value="1">Enabled</option>
+        </select>
+      </div>
     </div>
   </div>
 </div>
@@ -515,6 +523,85 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
     <div class="flex gap8 wrap-row">
       <button class="primary" onclick="saveSettings()">Save settings</button>
       <button onclick="resetSettings()">Reset to defaults</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP PANEL -->
+<div id="help-panel" class="hidden">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <span style="font-size:15px;font-weight:500">? Help</span>
+      <button onclick="hideHelp()" style="font-size:12px;padding:5px 12px">← Back</button>
+    </div>
+
+    <div class="sec-hdr">What is this?</div>
+    <p style="font-size:13px;color:var(--text2);margin:0 0 16px">This platform runs multiple AI agents from different providers simultaneously, forces structured debate, and drives toward a reasoned consensus — or invokes a reserved arbitrator if consensus isn't reached. Each provider brings a different analytical lens, training distribution, and reasoning style. The goal is to surface genuine disagreement, prevent any one model from dominating, and produce a synthesis that reflects where the models actually converged.</p>
+
+    <div class="sec-hdr">Quick start</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      <b>1.</b> Enter your problem in the text box. Be specific — include constraints, context, and what a good answer looks like.<br><br>
+      <b>2.</b> Select a <b>Focus mode</b>: General for analysis and strategy, Coding for implementation and review.<br><br>
+      <b>3.</b> Configure agents — toggle which providers to include and select models. Economy tier is cheapest; Premium uses the most capable models.<br><br>
+      <b>4.</b> Set the <b>Arbitrator</b> — the agent held in reserve to rule if consensus isn't reached. Perplexity is recommended when live data matters.<br><br>
+      <b>5.</b> Optionally enable <b>Moderation</b> — the arbitrator also reviews each round and issues binding orders to keep agents on topic.<br><br>
+      <b>6.</b> Hit <b>Start collaboration ↗</b>. Round 1 runs independently; from Round 2 agents debate the full transcript.
+    </div>
+
+    <div class="sec-hdr">How consensus works</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      From Round 2, each agent appends <code>[CONSENSUS: YES]</code> or <code>[CONSENSUS: NO: reason]</code> to every response. Consensus fires only when <b>all active agents</b> certify YES in the same round. These tags are stripped from the displayed text and shown as green/amber badges instead.<br><br>
+      For simple factual questions where all agents agreed in Round 1, agents use a brevity shortcut: <code>AGREEMENT: The answer is X. Nothing to add.</code> followed by <code>[CONSENSUS: YES]</code>.<br><br>
+      If consensus isn't reached by the arbitrator round (default: Round 10), the reserved agent enters, reviews the full transcript, issues binding rulings on each unresolved point, and writes the final synthesis.
+    </div>
+
+    <div class="sec-hdr">Operator controls during a session</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      <b>Checkpoint pauses</b> occur every N rounds (configurable). At each pause you can:<br>
+      &nbsp;&nbsp;• Add <b>operator guidance</b> — injected into all agent system prompts for the next round<br>
+      &nbsp;&nbsp;• Click <b>Use as final answer</b> — your guidance text becomes the final answer, bypassing further debate<br>
+      &nbsp;&nbsp;• Click <b>[Agent] closes</b> — designates that agent as immediate arbitrator<br>
+      &nbsp;&nbsp;• Click <b>End &amp; synthesize</b> — stops debate and generates synthesis from current transcript<br>
+      &nbsp;&nbsp;• Click <b>Resume</b> — continues debate<br><br>
+      The <b>⏹ Stop</b> button cancels all in-flight requests immediately. You can then synthesize or export from the stopped state.
+    </div>
+
+    <div class="sec-hdr">Perplexity &amp; live data</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      All providers (Anthropic, OpenAI, Grok, Gemini) reason from training data only when called via API — knowledge cutoffs range from early 2024 to early 2025. Perplexity is the only provider with live web search built into every API call.<br><br>
+      <b>Perplexity as debate agent</b> — its live data enters the conversation from Round 1.<br>
+      <b>Perplexity as arbitrator</b> — stays silent during debate, enters at Round 10 with current facts to rule.<br>
+      <b>Automatic fact-check</b> — whenever Perplexity did not debate (disabled, held as arbitrator, or arbitrator didn't fire), it automatically runs a factual verification of the final synthesis. Appears as a teal card with ✓ CONFIRMED / ⚠ CORRECTION / 📅 OUTDATED / ➕ ADDITIONAL CONTEXT.
+    </div>
+
+    <div class="sec-hdr">Prompt tips</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      <b>Works well:</b> questions with concrete constraints, at least 2-3 defensible positions, a clear decision to make, or current events questions (use Perplexity as arbitrator).<br><br>
+      <b>Avoid:</b> open-ended "most important factor" questions (agents manufacture disagreement), simple factual lookups (handled by brevity rule but wasteful), and narrow factual questions where agents may introduce unsolicited tangential facts that trigger debate about the wrong thing.<br><br>
+      <b>Tip:</b> the more specific your problem statement, the better the debate. Include numbers, timeframes, constraints, and what a good solution looks like.
+    </div>
+
+    <div class="sec-hdr">Cost &amp; providers</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 16px">
+      API costs are billed directly by each provider based on tokens used. A typical 10-round session with 4 agents at Economy tier costs under $0.10. Running cost and token count are shown in the header bar (toggle in Settings → Display).<br><br>
+      <b>Economy tier</b> (default): Haiku, GPT-4o mini, Grok-3 mini, Gemini 2.5 Flash, Sonar<br>
+      <b>Standard tier</b>: Sonnet, GPT-4o, Grok-3, Gemini 2.5 Flash, Sonar<br>
+      <b>Premium tier</b>: Opus, GPT-4o, Grok-3, Gemini 2.5 Pro, Sonar Pro
+    </div>
+
+    <div class="sec-hdr">Settings reference</div>
+    <div style="font-size:13px;color:var(--text2);margin:0 0 4px">
+      <b>Model tier</b> — Economy / Standard / Premium across all providers<br>
+      <b>Max tokens</b> — per-response token limit (default 1000; arbitration/synthesis use 2000 minimum)<br>
+      <b>Verbosity</b> — Concise / Standard / Detailed injected into system prompts<br>
+      <b>Pause every</b> — checkpoint frequency in rounds<br>
+      <b>Consensus detection</b> — Auto (self-certification) or Run to max rounds<br>
+      <b>Arbitrator activates</b> — which round the reserve agent enters<br>
+      <b>Arbitrator</b> — which provider to hold in reserve<br>
+      <b>Moderation</b> — enable to have arbitrator issue binding orders each round<br>
+      <b>Round delay</b> — pause between rounds (500ms default helps avoid rate limits)<br>
+      <b>Show running cost</b> — display cost in header bar<br>
+      <b>Show token count</b> — display token usage in header bar
     </div>
   </div>
 </div>
@@ -874,6 +961,18 @@ function buildTierOverrides() {
   PROVIDERS.forEach(p=>{ const s=$('override-'+p.id); if(s) s.value=CFG.agentTierOverride[p.id]||'global'; });
 }
 
+function showHelp(){
+  $('setup-panel').classList.add('hidden');
+  $('settings-panel').classList.add('hidden');
+  $('history-panel').classList.add('hidden');
+  $('help-panel').classList.remove('hidden');
+}
+
+function hideHelp(){
+  $('help-panel').classList.add('hidden');
+  $('setup-panel').classList.remove('hidden');
+}
+
 function showSettings() {
   populateSettingsForm();
   $('setup-panel').classList.add('hidden');
@@ -995,6 +1094,11 @@ function updateJudgeSelVisibility(){
   if(field) field.style.opacity = disabled ? '0.4' : '1';
   const sel = $('judge-agent');
   if(sel) sel.disabled = disabled;
+  // Moderator is only available when arbitrator is active
+  const modField = $('moderator-field');
+  const modSel = $('moderator-mode');
+  if(modField) modField.style.opacity = disabled ? '0.4' : '1';
+  if(modSel){ modSel.disabled = disabled; if(disabled) modSel.value = '0'; }
 }
 
 function buildJudgeAgentOptions(){
@@ -1440,18 +1544,22 @@ async function startSession(){
 
   const maxRaw = CFG.defaultMaxRounds;
   const maxRounds = judgeRound > 0 ? judgeRound : (parseInt(maxRaw) || Infinity);
+  const moderatorEnabled = !!(judgeRound > 0 && $('moderator-mode')?.value === '1');
   S={ problem, agents,
     maxRounds,
     pauseEvery:parseInt($('pause-every').value),
     consensusMode:$('consensus-mode').value,
     roundDelay:parseInt($('round-delay').value),
-    judgeAgent, judgeRound, focusMode,
+    judgeAgent, judgeRound, focusMode, moderatorEnabled,
+    moderatorNote:'',
     round:0, log:[], guidances:[], promptLog:[], consensusReached:false,
     stopped:false, errorCounts:{}, certifications:{}, lastCertifyingAgent:null,
     agentCosts:{}, totalCost:0, agentTokens:{}, totalTokens:0, done:false,
     sessionId: `s${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`
   };
 
+  $('thread').innerHTML='';
+  const cd=$('cost-display'); if(cd) cd.textContent='';
   $('thread').style.height=CFG.threadHeight+'px';
   $('setup-panel').classList.add('hidden');
   $('convo-panel').classList.remove('hidden');
@@ -1481,6 +1589,9 @@ async function runLoop(){
     if(S.stopped){ handleStop(); return; }
     await runOneRound();
     if(S.done) break;
+    // Moderator reviews after every round when enabled
+    if(S.moderatorEnabled && !S.done && S.round >= 2) await runModerator();
+    if(S.done) break;
     // Judge activates if no consensus by the designated round
     if(S.judgeAgent && S.judgeRound > 0 && S.round >= S.judgeRound && !S.consensusReached){
       await callJudge(); return;
@@ -1492,6 +1603,73 @@ async function runLoop(){
     if(S.round%S.pauseEvery===0){ await showPause(); return; }
     if(S.roundDelay>0) await sleep(S.roundDelay);
   }
+}
+
+async function runModerator(){
+  const judge = S.judgeAgent;
+  if(!judge) return;
+  setStatus(`${judge.name} (moderator) reviewing round ${S.round}…`);
+
+  const recent = S.log.filter(m => m.round === S.round)
+    .map(m => `[${m.name}]: ${m.text}`).join('\n\n');
+
+  const sys = `You are a strict session moderator with full authority to redirect agents. Your job is to keep every response tightly scoped to the original problem. You have the power to order specific agents to drop specific lines of inquiry.
+
+Review the latest round against the original problem. For each agent response, identify:
+- Any topic, fact, sub-question, or tangential argument that was NOT directly asked for in the original problem
+- Any agent who is recycling a dead-end argument that has already been addressed
+- Any agent who is debating a peripheral detail while the core question remains unanswered
+
+Then issue direct orders. Be specific. Name the agent. Name the topic to drop. Use commanding language.
+
+Format your response as direct orders, for example:
+"Anthropic: drop the discussion of Brady's attendance dates — the question only asks which college."
+"Grok: your IIT argument has been addressed twice. Do not raise it again."
+"All agents: the core question is [X]. Every response must directly address this. Nothing else."
+
+If all agents are on topic and advancing the discussion, output only: "MODERATOR: On track. Continue."
+
+Maximum 4 orders. Be ruthless about scope. The original problem is the only thing that matters.`;
+
+  const usr = `Original problem: "${S.problem}"
+
+Round ${S.round} responses:
+
+${recent}
+
+Issue specific orders to keep agents on topic. If anything is off-topic or circling, name the agent and the specific topic to drop:`;
+
+  try {
+    const result = await dispatchHighLimit(judge, sys, usr);
+    const note = (result?.text ?? result).trim();
+    trackCost(judge, result?.inputTokens||0, result?.outputTokens||0);
+    const clean = note.replace(/^MODERATOR:\s*/i,'').trim();
+    if(!/^on track\.?\s*continue\.?$/i.test(clean)){
+      // Show as a distinct moderator card — always visible regardless of showSysMessages
+      const thread = $('thread');
+      const div = document.createElement('div');
+      div.className = 'msg msg-sys';
+      div.style.cssText = 'border-left:3px solid #8B5CF6;padding:8px 12px;font-size:12px;color:var(--text2);background:var(--bg2)';
+      div.innerHTML = `<span style="color:#8B5CF6;font-weight:500">⚖ ${judge.name} (moderator) · Round ${S.round}:</span> ${esc(clean)}`;
+      thread.appendChild(div);
+      thread.scrollTop = thread.scrollHeight;
+      S.moderatorNote = clean;
+    } else {
+      // Still show a subtle "on track" confirmation so operator knows moderator ran
+      const thread = $('thread');
+      const div = document.createElement('div');
+      div.className = 'msg msg-sys';
+      div.style.cssText = 'border-left:3px solid #8B5CF6;padding:6px 12px;font-size:11px;color:var(--text3);background:var(--bg2)';
+      div.innerHTML = `<span style="color:#8B5CF6">⚖ ${judge.name} (moderator) · Round ${S.round}:</span> On track — no steering needed.`;
+      thread.appendChild(div);
+      thread.scrollTop = thread.scrollHeight;
+      S.moderatorNote = '';
+    }
+  } catch(e) {
+    S.moderatorNote = '';
+    console.warn('Moderator error:', e.message);
+  }
+  setStatus('', false);
 }
 
 async function callJudge(){
@@ -1656,6 +1834,9 @@ RESPONSE STRUCTURE (only if the brevity rule does not apply — follow this exac
 If your entire response would consist only of agreement with what has already been said, write only: "AGREEMENT: AgentName's position on [topic] is correct. Nothing to add." then append the CONSENSUS CERTIFICATION below.` : '',
       verbNote,
       nearEnd ? 'Final rounds — state your final position on each open question directly and concisely. Do NOT abandon genuine disagreements just because the session is ending. If you still disagree, certify NO.' : '',
+      (S.moderatorNote && !independent) ? `MODERATOR ORDERS (binding — you must comply with these before writing anything else):
+${S.moderatorNote}
+If you are named above, you must immediately drop the specified topic. Do not address it, defend it, or reference it again. Comply and move on.` : '',
       certRound ? `CONSENSUS CERTIFICATION (mandatory — always the absolute last line of your response, no exceptions):
 [CONSENSUS: YES] — ONLY if your response contains NO CHALLENGE, NO UNADDRESSED, and NO OPEN QUESTIONS. If you raised any challenge or flagged any unresolved point anywhere in this response, you MUST certify NO.
 [CONSENSUS: NO: <specific point(s) still unresolved>] — if your response contains ANY CHALLENGE, UNADDRESSED, or OPEN QUESTION, or if any disagreement remains.

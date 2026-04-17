@@ -75,13 +75,23 @@ Switching modes changes the textarea placeholder, per-agent system prompts, deba
 - **Arbitrator fallback** — if the designated arbitrator's provider fails, the system falls back to a randomly selected active agent
 - **Manual arbitration** — at any checkpoint pause the operator can designate any active agent to close the discussion immediately as an on-demand arbitrator
 
-### Operator Controls
+### Moderator
+When enabled, the reserved arbitrator agent also acts as a round-by-round moderator. After every round it reviews all agent responses against the original problem and issues binding orders to specific agents — naming the agent and the exact topic or argument to drop. Agents receive these as mandatory instructions before writing their next response.
+
+- **Moderator messages** appear as purple-bordered cards in the thread after each round, showing exactly what was ordered
+- **"On track"** rounds produce a small confirmation note; only drift or circling triggers actual orders
+- The same agent serves as both moderator (every round) and arbitrator (final round) — it moderates throughout then rules definitively at the configured threshold
+- Moderation is enabled via the **Moderation** dropdown next to the Arbitrator selector; only active when an arbitrator round is configured
+
+
 - **Checkpoint pauses** every N rounds — the most recent dissenting agent writes a concise bullet-list of open disagreements from their own perspective; operator can inject guidance, use their own text as a final answer, or designate an agent to close
 - **Use as final answer** — operator types a definitive answer in the guidance field and clicks this button to bypass all further rounds and go straight to synthesis
 - **Agent closes** — operator selects any active agent at a checkpoint to act as immediate arbitrator
 - **Stop** — cancels all in-flight parallel fetches simultaneously via shared AbortController
 - **↺ New Session** — returns to the setup page with the prior prompt intact, ready to run again or modify
-- **✕ Clear prompt** — clears the problem textarea on the setup page
+- **✕ Clear prompt** — clears the problem textarea; sits below the textarea opposite the Start button
+- **Start collaboration ↗** — sits below the problem textarea opposite Clear prompt; thread is fully cleared before each new session regardless of how you navigated back
+- **? Help** — opens an in-app help panel covering quick start, consensus mechanics, operator controls, Perplexity integration, prompt tips, and settings reference
 - **Agent drop handling** — permanent errors trigger a drop confirmation; session continues if ≥2 agents remain
 
 ### Perplexity Integration
@@ -124,7 +134,7 @@ For purely analytical, strategic, or historical questions where recency doesn't 
 /
 ├── server.js          — Express proxy, logging, session persistence
 ├── public/
-│   └── index.html     — Entire frontend (single file, ~2200 lines)
+│   └── index.html     — Entire frontend (single file, ~2600 lines)
 ├── .env               — API keys (never committed)
 ├── .env.example       — Template
 ├── logs/              — Daily NDJSON prompt logs (auto-created)
@@ -229,7 +239,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 1. **Configure agents** — check the providers you want to include; select models and review the analytical lens for each
 2. **Select focus mode** — General for analysis and strategy; Coding for implementation and review
-3. **Set arbitrator** — choose which round the arbitrator activates (default: Round 10) and which agent to use (Perplexity recommended for live-data grounding); if Perplexity is configured but not debating, it automatically runs a current events fact-check after every session regardless
+3. **Set arbitrator** — choose which round the arbitrator activates (default: Round 10) and which agent to use (Perplexity recommended for live-data grounding); optionally enable **Moderation** to have the arbitrator issue binding steering orders after every round; if Perplexity is configured but not debating, it automatically runs a current events fact-check after every session regardless
 4. **Enter a problem** — specific, debatable questions with concrete constraints work best
 5. **Start** — Round 1 runs in parallel independently; from Round 2 agents debate the full transcript
 6. **Monitor** — watch consensus certifications appear on each message; cost accumulates in the header bar
@@ -270,7 +280,10 @@ Prompts that tend to over-debate:
 | Consensus detection | Auto | Auto (agent self-certification) or Run to max rounds |
 | Arbitrator activates | Round 10 | Round at which reserve agent enters; Disabled to turn off |
 | Arbitrator | Auto (random) | Which provider to hold in reserve; explicit selection recommended for Perplexity |
+| Moderation | Disabled | When enabled, the arbitrator agent reviews and issues binding orders after every round; only available when an arbitrator is configured |
 | Round delay | 500ms | Pause between rounds; set to 0 for maximum speed |
+| Show running cost | On | Display cumulative session cost in the header bar |
+| Show token count | Off | Display cumulative token usage alongside cost in the header bar |
 
 ---
 
