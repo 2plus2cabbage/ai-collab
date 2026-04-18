@@ -414,6 +414,25 @@ html.force-dark .msg-skip{ background:#2a2000!important; }
           <option value="2000">2 s</option>
         </select>
       </div>
+      <div class="field">
+        <label>Default moderation</label>
+        <select id="s-moderator-mode">
+          <option value="0">Disabled</option>
+          <option value="1">Enabled</option>
+        </select>
+        <div class="hint">Sets the default state of the Moderation dropdown on the setup page. Moderation is only active when an arbitrator is configured.</div>
+      </div>
+      <div class="field">
+        <label>Default arbitrator round</label>
+        <select id="s-judge-round">
+          <option value="0">Disabled</option>
+          <option value="5">Round 5</option>
+          <option value="10" selected>Round 10</option>
+          <option value="15">Round 15</option>
+          <option value="20">Round 20</option>
+        </select>
+        <div class="hint">Round at which the reserved arbitrator enters if consensus hasn't been reached.</div>
+      </div>
     </div>
 
     <hr>
@@ -779,6 +798,8 @@ const DEFAULT_SETTINGS = {
   defaultPauseEvery:'10',
   defaultRoundDelay:'500',
   defaultConsensusMode:'auto',
+  defaultModeratorMode:'0',
+  defaultJudgeRound:'10',
   consensusMin:'majority',
   consensusPhrases:'',
   synthesisAgent:'auto',
@@ -866,6 +887,8 @@ function saveSettings() {
   CFG.defaultPauseEvery = $('s-pause-every').value;
   CFG.defaultRoundDelay = $('s-round-delay').value;
   CFG.defaultConsensusMode = $('s-consensus-mode').value;
+  CFG.defaultModeratorMode = $('s-moderator-mode').value;
+  CFG.defaultJudgeRound    = $('s-judge-round').value;
   CFG.consensusPhrases  = $('s-consensus-phrases').value;
   CFG.showSysMessages   = $('s-show-sys').checked;
   CFG.showCost          = $('s-show-cost').checked;
@@ -912,6 +935,8 @@ function populateSettingsForm() {
   setV('s-pause-every',     CFG.defaultPauseEvery);
   setV('s-round-delay',     CFG.defaultRoundDelay);
   setV('s-consensus-mode',  CFG.defaultConsensusMode);
+  setV('s-moderator-mode',  CFG.defaultModeratorMode || '0');
+  setV('s-judge-round',     CFG.defaultJudgeRound || '10');
   setV('s-thread-height',   CFG.threadHeight);
   setV('s-color-mode',      CFG.colorMode);
   setV('s-export-format',   CFG.exportFormat);
@@ -934,6 +959,9 @@ function applySettingsToSetupForm() {
   setV('pause-every',   CFG.defaultPauseEvery);
   setV('round-delay',   CFG.defaultRoundDelay);
   setV('consensus-mode',CFG.defaultConsensusMode);
+  setV('moderator-mode',CFG.defaultModeratorMode || '0');
+  setV('judge-round',   CFG.defaultJudgeRound || '10');
+  updateJudgeSelVisibility();
   setV('judge-round',   CFG.defaultJudgeRound ?? '10');
 }
 
@@ -2501,7 +2529,9 @@ async function saveSession(synthesisText, synthesisAgentName) {
         synthesisAgent  : synthesisAgentName,
         synthesis       : synthesisText,
         log             : S.log,
-        guidances       : S.guidances
+        guidances       : S.guidances,
+        totalCost       : S.totalCost || 0,
+        totalTokens     : S.totalTokens || 0
       })
     });
   } catch(e) { console.warn('Could not save session:', e.message); }
@@ -2511,8 +2541,11 @@ async function saveSession(synthesisText, synthesisAgentName) {
 let historyCurrentSession = null;
 
 function showHistory() {
-  ['setup-panel','settings-panel','convo-panel'].forEach(id => $(id).classList.add('hidden'));
+  ['setup-panel','settings-panel','convo-panel','help-panel'].forEach(id => $(id).classList.add('hidden'));
   $('history-detail').classList.add('hidden');
+  // Always restore the list card in case it was hidden by a prior detail view
+  const listCard = $('history-list').closest('.card');
+  if(listCard) listCard.style.display = '';
   $('history-panel').classList.remove('hidden');
   loadHistoryList();
 }
@@ -2543,7 +2576,7 @@ async function loadHistoryList() {
         onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.problem)}</div>
-          <div style="font-size:11px;color:var(--text3)">${date} · ${s.agents?.join(', ')} · ${s.rounds} round${s.rounds!==1?'s':''}</div>
+          <div style="font-size:11px;color:var(--text3)">${date} · ${s.agents?.join(', ')} · ${s.rounds} round${s.rounds!==1?'s':''}${s.totalCost!=null?' · $'+Number(s.totalCost).toFixed(4):''}${s.totalTokens!=null?' · '+(Number(s.totalTokens)/1000).toFixed(1)+'k tokens':''}</div>
         </div>
         <div style="flex-shrink:0;margin-top:2px">${status}</div>
       </div>`;
@@ -2565,7 +2598,9 @@ async function openHistorySession(sessionId) {
 
     $('hd-title').textContent = new Date(s.timestamp).toLocaleString();
     const status = s.consensusReached ? '✓ Consensus' : s.stopped ? '⏹ Stopped' : 'Complete';
-    $('hd-meta').textContent = `${s.agents?.map(a=>a.name).join(', ')} · ${s.rounds} rounds · ${status}`;
+    const costStr = s.totalCost != null ? ` · $${Number(s.totalCost).toFixed(4)}` : '';
+    const tokStr  = s.totalTokens != null ? ` · ${(Number(s.totalTokens)/1000).toFixed(1)}k tokens` : '';
+    $('hd-meta').textContent = `${s.agents?.map(a=>a.name).join(', ')} · ${s.rounds} rounds · ${status}${costStr}${tokStr}`;
     $('hd-problem').textContent = s.problem;
 
     thread.innerHTML = (s.log || []).map(m => {
