@@ -284,9 +284,9 @@ Prompts that tend to over-debate:
 | Verbosity | Standard | Concise/Standard/Detailed — injected into system prompts |
 | Pause every | 10 rounds | Checkpoint frequency for operator review |
 | Consensus detection | Auto | Auto (agent self-certification) or Run to max rounds |
-| Arbitrator activates | Round 10 | Round at which reserve agent enters; Disabled to turn off |
+| Arbitrator activates | Round 10 | Round at which reserve agent enters; Disabled to turn off; also settable as a sticky default in Settings |
 | Arbitrator | Auto (random) | Which provider to hold in reserve; explicit selection recommended for Perplexity |
-| Moderation | Disabled | When enabled, the arbitrator agent reviews and issues binding orders after every round; only available when an arbitrator is configured |
+| Moderation | Disabled | When enabled, the arbitrator agent reviews and issues binding orders after every round; also settable as a sticky default in Settings |
 | Round delay | 500ms | Pause between rounds; set to 0 for maximum speed |
 | Show running cost | On | Display cumulative session cost in the header bar |
 | Show token count | Off | Display cumulative token usage alongside cost in the header bar |
